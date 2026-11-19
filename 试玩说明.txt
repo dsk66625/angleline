@@ -1,4 +1,4 @@
-《角线》v0.5.0 ｜ Windows 手感试玩
+《角线》v0.5.1 ｜ Windows 手感试玩
 
 启动
 双击 Angleline.exe。首次启动会显示设置。填入你平时的 CS2 鼠标灵敏度，选择画面比例，然后点击「进入练习」。
@@ -13,9 +13,8 @@
 点击「进入练习」应用并保存，下次启动会沿用。直接按 Esc 返回靶场会放弃本次编辑。要找回原版绿色十字，可在准星页恢复默认，再点击「进入练习」。
 
 游戏内更新
-在设置中点「游戏更新」。首次使用时，在 GitHub 创建细粒度访问令牌，选 Only select repositories 和 dsk66625/angleline，并把 Contents 设成 Read-only。
-把令牌粘贴到游戏的更新界面，点击「检查更新」。授权成功后，Windows 会加密保存令牌，游戏每次启动会检查正式发行版并在后台下载新版。
-看到「重启并更新」就可以安装。更新包通过 SHA-256 校验后才会替换当前目录的 Angleline.exe。旧版 v0.4.0 及更早版本需先从 GitHub Releases 下载一次支持更新的试玩包。
+游戏每次启动会从公开的 GitHub Releases 检查正式发行版并在后台下载新版。也可在设置中点「游戏更新」→「检查更新」。整个过程可直接使用，无需登录或令牌。
+看到「重启并更新」就可以安装。更新包通过 SHA-256 校验后才会替换当前目录的 Angleline.exe。使用 v0.5.0 或更早版本的玩家，可以先从 GitHub Releases 下载一次 v0.5.1 或更新的试玩包。
 
 在靶场里
 WASD 移动，空格跳跃，Shift 静步，Ctrl 蹲。鼠标左键射击，1 切手枪，2 切步枪，R 换弹，F2 回到出生点并补满弹药。
@@ -46,3 +45,4 @@ CS2 六组单发逐步记录得出额外散布衰减 90% 需约 368 ms。《角�
 
 游戏引擎 Godot 4.6.1，Copyright © 2014–present Godot Engine contributors，Copyright © 2007–2014 Juan Linietsky, Ariel Manzur。
 引擎及第三方组件许可证见 Godot-LICENSES.txt。游戏地图、模型和音效为本项目生成。
+《角线》的原创代码和项目文件采用 MIT 许可证，见本发行包内的 LICENSE。

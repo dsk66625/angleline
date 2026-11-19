@@ -6,11 +6,8 @@ const PAPER := Color("#e6ece8")
 
 var updater: Updater
 var _status: Label
-var _token: LineEdit
 var _check: Button
 var _install: Button
-var _token_link: Button
-var _forget: Button
 var _progress: ProgressBar
 
 
@@ -50,30 +47,16 @@ func _ready() -> void:
 	_progress = ProgressBar.new()
 	_progress.custom_minimum_size.y = 18
 	body.add_child(_progress)
-	var auth_title := _label(body, "GitHub 令牌仅需授权 angleline 仓库的 Contents 只读权限。", 14, PAPER)
-	auth_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_token = LineEdit.new()
-	_token.secret = true
-	_token.max_length = 255
-	_token.placeholder_text = "粘贴 GitHub 细粒度令牌"
-	_token.text_submitted.connect(func(_value: String) -> void: _check_update())
-	body.add_child(_token)
-	var permissions := HBoxContainer.new()
-	body.add_child(permissions)
-	_token_link = _button(permissions, "在 GitHub 创建令牌", func() -> void: OS.shell_open(Updater.TOKEN_PAGE))
-	_forget = _button(permissions, "清除本机授权", updater.forget_token)
 	var actions := HBoxContainer.new()
 	body.add_child(actions)
-	_check = _button(actions, "检查更新", _check_update)
+	_check = _button(actions, "检查更新", updater.check)
 	_install = _button(actions, "重启并更新", updater.install)
 	_install.add_theme_color_override("font_color", GREEN)
 	updater.changed.connect(_refresh)
 	visibility_changed.connect(func() -> void:
 		set_process(is_visible_in_tree())
 		if is_visible_in_tree():
-			back.grab_focus()
-		else:
-			_token.clear())
+			back.grab_focus())
 	set_process(false)
 	_refresh()
 
@@ -88,22 +71,10 @@ func _process(_delta: float) -> void:
 		_progress.value = updater.download_progress() * 100.0
 
 
-func _check_update() -> void:
-	if updater.busy():
-		return
-	var credential := _token.text
-	_token.clear()
-	updater.check(credential)
-
-
 func _refresh() -> void:
 	_status.text = updater.status
 	_progress.visible = updater.state == Updater.State.DOWNLOADING
-	_token.editable = updater.supported() and not updater.busy()
-	_token.placeholder_text = "粘贴新令牌以更换本机授权" if updater.has_token() else "粘贴 GitHub 细粒度令牌"
 	_check.disabled = not updater.supported() or updater.busy()
-	_token_link.disabled = not updater.supported()
-	_forget.disabled = not updater.has_token() or updater.busy()
 	_install.visible = updater.state in [Updater.State.READY, Updater.State.INSTALLING]
 	_install.disabled = updater.busy()
 
