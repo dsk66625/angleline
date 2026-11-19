@@ -79,3 +79,11 @@ $env:APPDATA = $qa
 
 - 工作树中另有未跟踪 `duel_check.gd` / `duel_world.gd`（含 .uid），非本次美术改动，未纳入提交，归属待逻辑侧确认。
 - 外部素材：无。贴图与模型全部运行时程序化生成，无需登记 `ASSET_SOURCES.md`。
+
+## 试玩包 v0.7.1（2026-11-20 导出）
+
+- 版本提交 `00b1282`（`project.godot` 0.7.0→0.7.1、`export_presets.cfg` 文件/产品版本 0.7.1.0、导出排除 `art_views.gd`）。从该提交的干净临时工作树导出，未跟踪的 `duel_*` / `dbg_deck.gd` 不在包内。
+- 成品：`D:\工作区\游戏成果存放\Angleline-v0.7.1-Windows-x64.zip`，已解压目录 `角线试玩 v0.7.1\Angleline.exe`（embed_pck，含 LICENSE / Godot-LICENSES / 试玩说明）。
+- 导出环境：模板 4.6.1.stable 复制自主工作树 `.toolchain/editor_data/export_templates`，隔离 APPDATA 为本树 `.toolchain/art-qa-export`，不污染日常 Godot 设置。
+- 导出包验证：`SELF_TEST PASS`（数值与基线逐字一致）。同时刻导出级对照：v0.7.0 包 2032.6 FPS / P99 0.84 ms，v0.7.1 包 1798.6 FPS / P99 1.01 ms（平均 -11.5%、P99 +0.17 ms，即贴图+深度雾成本，余量仍大）。日志在 `.toolchain/art-qa-export/`（`self-test.log`、`bench-1080p-1.log`、`bench-v070-now.log`）。
+-  updater 语义：本地 0.7.1 高于公开 release 0.7.0，更新菜单显示「当前已是最新版本」，不会提示降级。
