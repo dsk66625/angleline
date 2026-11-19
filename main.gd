@@ -11,6 +11,7 @@ const SPAWN := [Vector3(0, 0.02, 6), Vector3(3, 0.02, 6)]
 const VERTICAL_FOV := 73.739795
 const SETTINGS_PATH := "user://angleline.cfg"
 const TICK := 1.0 / 128.0
+const SWING_DURATION := 0.26
 
 var options := {"sensitivity": 1.0, "axis_x": 1.0, "axis_y": 1.0, "view": 0,
 	"resolution": Vector2i.ZERO, "fullscreen": false, "cap": 0, "vsync": false, "volume": 65,
@@ -25,7 +26,7 @@ var updater: Updater
 var update_menu: UpdateMenu
 var active_play := false
 var aim := Vector2.ZERO
-var requested_weapon := 1
+var requested_weapon := Fighter.RIFLE
 var _jump_pressed := false
 var _fire_pressed := false
 var _reload_pressed := false
@@ -49,7 +50,8 @@ var _performance: Array[float] = []
 var _performance_elapsed := 0.0
 var _last_info := ""
 var _rig: Node3D
-var _gun_meshes: Array[Node3D] = []
+var _weapon_models: Array[Node3D] = []
+var _swing_time := 0.0
 var _muzzle: MeshInstance3D
 var _tracer_pool: Array[MeshInstance3D] = []
 var _tracer_timers := PackedFloat32Array()
@@ -69,6 +71,7 @@ var _bench_frames: Array[float] = []
 var _test_round := 0
 var _test_fires := 0
 var _test_received := 0
+var _test_saw_remote_swing := false
 var _test_start := Vector3.ZERO
 var _test_peak := 0.0
 var _test_stop := 0.0
@@ -183,8 +186,9 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif active_play:
 			match event.physical_keycode:
-				KEY_1: requested_weapon = 0
-				KEY_2: requested_weapon = 1
+				KEY_1: requested_weapon = Fighter.RIFLE
+				KEY_2: requested_weapon = Fighter.PISTOL
+				KEY_3: requested_weapon = Fighter.KNIFE
 				KEY_SPACE: _jump_pressed = true
 				KEY_R: _reload_pressed = true
 				KEY_F2: _reset_player()
@@ -195,8 +199,10 @@ func _input(event: InputEvent) -> void:
 		aim += Fighter.turn_delta(event.screen_relative, options["sensitivity"], axis)
 		aim.x = wrapf(aim.x, -PI, PI)
 		aim.y = clampf(aim.y, deg_to_rad(-89), deg_to_rad(89))
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		_fire_pressed = true
+	elif event is InputEventMouseButton and event.pressed:
+		match event.button_index:
+			MOUSE_BUTTON_LEFT: _fire_pressed = true
+			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN: _jump_pressed = true
 
 func _pause() -> void:
 	active_play = false
@@ -393,13 +399,15 @@ func _reconcile() -> void:
 
 func _read_player() -> Dictionary:
 	var d := Vector2.ZERO
+	var jump_held := active_play and Input.is_physical_key_pressed(KEY_SPACE)
 	if active_play:
 		d.x = float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A))
 		d.y = float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
 	var command := {"seq": _seq, "move": d, "yaw": aim.x, "pitch": aim.y, "weapon": requested_weapon,
 		"walk": active_play and Input.is_physical_key_pressed(KEY_SHIFT),
 		"crouch": active_play and Input.is_physical_key_pressed(KEY_CTRL),
-		"jump": active_play and _jump_pressed, "reload": active_play and _reload_pressed,
+		"jump": active_play and (_jump_pressed or jump_held), "jump_held": jump_held,
+		"reload": active_play and _reload_pressed,
 		"fire": active_play and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT),
 		"fire_pressed": active_play and _fire_pressed}
 	_jump_pressed = false
@@ -450,13 +458,19 @@ func _next_remote_command() -> Dictionary:
 		_ack = _last_remote["seq"]
 		return _last_remote
 	_silence += 1
-	return {"move": _last_remote.get("move", Vector2.ZERO) if _silence < 8 else Vector2.ZERO,
+	var repeat_held := _silence < 8
+	return {"move": _last_remote.get("move", Vector2.ZERO) if repeat_held else Vector2.ZERO,
+		"jump": repeat_held and _last_remote.get("jump_held", false),
+		"crouch": repeat_held and _last_remote.get("crouch", false),
+		"walk": repeat_held and _last_remote.get("walk", false),
 		"yaw": _last_remote.get("yaw", 0.0), "pitch": _last_remote.get("pitch", 0.0)}
 
 func _cast(shot: Dictionary, shooter: TrialFighter) -> Dictionary:
 	var origin: Vector3 = shot["origin"]
-	var end: Vector3 = origin + shot["direction"] * 90.0
+	var reach: float = shot.get("range", 90.0)
+	var end: Vector3 = origin + shot["direction"] * reach
 	var ray := PhysicsRayQueryParameters3D.create(origin, end, 3, [shooter.get_rid()])
+	ray.hit_from_inside = shot["weapon"] == Fighter.KNIFE
 	var impact := get_world_3d().direct_space_state.intersect_ray(ray)
 	var target := 0
 	var normal := Vector3.ZERO
@@ -473,7 +487,10 @@ func _cast(shot: Dictionary, shooter: TrialFighter) -> Dictionary:
 
 func _local_shot(shot: Dictionary) -> void:
 	var impact := _cast(shot, local_player)
-	_flash_time = 0.042
+	if shot["weapon"] == Fighter.KNIFE:
+		_swing_time = SWING_DURATION
+	else:
+		_flash_time = 0.042
 	_feedback(impact, true)
 	if link.is_host and link.remote_ready:
 		impact["slot"] = 0
@@ -493,6 +510,10 @@ func _feedback(event: Dictionary, own: bool) -> void:
 			_audio.play()
 		if not link.remote_ready or link.is_host:
 			_show_hit(event["target"])
+	if event["weapon"] == Fighter.KNIFE:
+		if not own and _smoke in ["--smoke-host", "--smoke-client"]:
+			_test_saw_remote_swing = true
+		return
 	var origin: Vector3 = event["origin"]
 	var end: Vector3 = event["end"]
 	var normal: Vector3 = event.get("normal", Vector3.ZERO)
@@ -528,19 +549,23 @@ func _process(dt: float) -> void:
 		remote_player.global_position = _proxy_from.lerp(_proxy_to, clampf(_proxy_elapsed * 64.0, 0.0, 1.0))
 	_flash_time = maxf(_flash_time - dt, 0.0)
 	_hit_time = maxf(_hit_time - dt, 0.0)
-	_muzzle.visible = _flash_time > 0.0
-	_muzzle.position.z = -0.21 if local_player.weapon == 0 else -0.56
+	_swing_time = maxf(_swing_time - dt, 0.0) if local_player.weapon == Fighter.KNIFE else 0.0
+	var swing := sin(PI * _swing_time / SWING_DURATION)
+	_muzzle.visible = _flash_time > 0.0 and local_player.weapon != Fighter.KNIFE
+	_muzzle.position.z = -0.21 if local_player.weapon == Fighter.PISTOL else -0.56
 	_rig.position = Vector3(0.33, -0.29, -0.64 + minf(recoil.y * 0.009, 0.07))
-	_rig.rotation.x = -local_player.reloading * 0.15
-	_gun_meshes[0].visible = local_player.weapon == 0
-	_gun_meshes[1].visible = local_player.weapon == 1
+	if local_player.weapon == Fighter.KNIFE:
+		_rig.position = Vector3(0.29 - 0.25 * swing, -0.20 + 0.08 * swing, -0.76)
+	_rig.rotation = Vector3(-local_player.reloading * 0.15, 0.5 * swing, 0.7 * swing)
+	for index in _weapon_models.size():
+		_weapon_models[index].visible = local_player.weapon == index
 	for index in _tracer_pool.size():
 		if _tracer_timers[index] > 0.0:
 			_tracer_timers[index] -= dt
 			if _tracer_timers[index] <= 0.0:
 				_tracer_pool[index].hide()
 	var shown_spread := snappedf(local_player.spread_degrees(), 0.1)
-	hud.crosshair.set_feedback(shown_spread, _flash_time > 0.0, _hit_time > 0.0)
+	hud.crosshair.set_feedback(shown_spread, _muzzle.visible, _hit_time > 0.0)
 	hud.hit_label.modulate.a = clampf(_hit_time * 9.0, 0.0, 1.0)
 	_performance.append(dt * 1000.0)
 	_performance_elapsed += dt
@@ -567,6 +592,11 @@ func _update_player_stats() -> void:
 	var sens: float = options["sensitivity"]
 	var state_name := ["宽屏", "4:3 黑边", "4:3 拉伸"][int(options["view"])] as String
 	hud.position_label.text = "%s  ·  灵敏度 %s  ·  命中 %d" % [state_name, str(sens), _number_hits]
+	var speed := roundi(local_player.accuracy_speed / Fighter.UNIT)
+	if local_player.weapon == Fighter.KNIFE:
+		hud.rig_label.text = "%03d u/s" % speed
+		_update_ammo()
+		return
 	var accuracy_state := "首发稳定"
 	if not local_player.grounded:
 		accuracy_state = "腾空散布"
@@ -574,15 +604,16 @@ func _update_player_stats() -> void:
 		accuracy_state = "移动散布"
 	elif local_player.streak > 0:
 		accuracy_state = "射击恢复"
-	hud.rig_label.text = "%03d u/s   /   %s   /   %.1f°" % [roundi(local_player.accuracy_speed / Fighter.UNIT),
-		accuracy_state, local_player.spread_degrees()]
+	hud.rig_label.text = "%03d u/s   /   %s   /   %.1f°" % [speed, accuracy_state, local_player.spread_degrees()]
 	_update_ammo()
 
 func _update_ammo() -> void:
-	var info := "%s    %02d / %02d" % ["手枪" if local_player.weapon == 0 else "步枪",
-		local_player.rounds[local_player.weapon], Fighter.CAPACITY[local_player.weapon]]
-	if local_player.reloading > 0.0:
-		info += "  换弹"
+	var info := "3  近战刀    左键挥击"
+	if local_player.weapon != Fighter.KNIFE:
+		var label := "1  主武器" if local_player.weapon == Fighter.RIFLE else "2  手枪"
+		info = "%s    %02d / %02d" % [label, local_player.rounds[local_player.weapon], Fighter.CAPACITY[local_player.weapon]]
+		if local_player.reloading > 0.0:
+			info += "  换弹"
 	if info != _last_info:
 		_last_info = info
 		hud.ammo_label.text = info
@@ -590,7 +621,7 @@ func _update_ammo() -> void:
 func _build_presentation() -> void:
 	_audio = AudioStreamPlayer.new()
 	add_child(_audio)
-	_sounds = [_synthesize_shot(0), _synthesize_shot(1)]
+	_sounds = [_weapon_sound(Fighter.PISTOL), _weapon_sound(Fighter.RIFLE), _weapon_sound(Fighter.KNIFE)]
 	_rig = Node3D.new()
 	camera.add_child(_rig)
 	var steel := _material(Color("#354144"))
@@ -611,7 +642,22 @@ func _build_presentation() -> void:
 	_solid(rifle, Vector3(0.095, 0.21, 0.11), Vector3(0, -0.085, -0.075), rubber)
 	_solid(rifle, Vector3(0.10, 0.085, 0.33), Vector3(0, -0.01, 0.18), rubber)
 	_solid(rifle, Vector3(0.042, 0.05, 0.055), Vector3(0, 0.096, -0.26), steel)
-	_gun_meshes = [pistol, rifle]
+	var knife := Node3D.new()
+	_rig.add_child(knife)
+	knife.position = Vector3(0.05, -0.11, 0.16)
+	knife.rotation_degrees = Vector3(-41, 10, 26)
+	_solid(knife, Vector3(0.054, 0.17, 0.052), Vector3(0, 0.05, 0), rubber)
+	_solid(knife, Vector3(0.105, 0.026, 0.054), Vector3(0, 0.14, 0), steel)
+	var blade_shape := PrismMesh.new()
+	blade_shape.size = Vector3(0.084, 0.29, 0.028)
+	blade_shape.left_to_right = 0.86
+	blade_shape.material = _material(Color("#72868c"))
+	var blade := MeshInstance3D.new()
+	blade.mesh = blade_shape
+	blade.position.y = 0.294
+	blade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	knife.add_child(blade)
+	_weapon_models = [pistol, rifle, knife]
 	var glow := _material(Color("#f9d38d"), true)
 	_muzzle = _solid(_rig, Vector3(0.08, 0.045, 0.10), Vector3(0, 0.04, -0.56), glow)
 	_muzzle.hide()
@@ -691,12 +737,12 @@ func _solid(parent: Node3D, size: Vector3, location: Vector3, material: Material
 	parent.add_child(instance)
 	return instance
 
-func _synthesize_shot(which: int) -> AudioStreamWAV:
+func _weapon_sound(which: int) -> AudioStreamWAV:
 	var sound := AudioStreamWAV.new()
 	sound.format = AudioStreamWAV.FORMAT_16_BITS
 	sound.mix_rate = 22050
 	var samples := PackedByteArray()
-	var count := 3400 if which == 0 else 4400
+	var count: int = [3400, 4400, 3000][which]
 	samples.resize(count * 2)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9181 + which
@@ -705,8 +751,12 @@ func _synthesize_shot(which: int) -> AudioStreamWAV:
 		var t := float(index) / 22050.0
 		var noise := rng.randf_range(-1, 1)
 		low = lerpf(low, noise, 0.19)
-		var kick := sin(TAU * (110.0 if which == 0 else 77.0) * t) * exp(-t * 39.0)
-		var value := low * 0.55 * exp(-t * 28) + noise * 0.36 * exp(-t * 105) + kick * 0.40
+		var value: float
+		if which == Fighter.KNIFE:
+			value = low * 0.7 * pow(sin(PI * index / float(count)), 2.0)
+		else:
+			var kick := sin(TAU * (110.0 if which == Fighter.PISTOL else 77.0) * t) * exp(-t * 39.0)
+			value = low * 0.55 * exp(-t * 28) + noise * 0.36 * exp(-t * 105) + kick * 0.40
 		samples.encode_s16(index * 2, roundi(clampf(value, -0.95, 0.95) * 32767.0))
 	sound.data = samples
 	return sound
@@ -771,11 +821,14 @@ func _network_test(command: Dictionary) -> void:
 	_test_round += 1
 	if _test_round < 53:
 		command["move"] = Vector2(0, -1)
-	if _test_round == 58 or _test_round == 78:
+	if _test_round >= 90:
+		command["weapon"] = Fighter.KNIFE
+	if _test_round in [58, 78, 140]:
 		command["fire_pressed"] = true
 	if _test_round == 180:
-		var valid := _test_fires == 2 and _test_received >= 2 and is_instance_valid(remote_player)
+		var valid := _test_fires == 3 and _test_received >= 3 and _test_saw_remote_swing and is_instance_valid(remote_player)
 		valid = valid and remote_player.position.z < 5.4 and local_player.position.z < 5.4
+		valid = valid and local_player.weapon == Fighter.KNIFE and remote_player.weapon == Fighter.KNIFE
 		print("NETWORK_TEST ", "PASS" if valid else "FAIL", " role=", "host" if link.is_host else "guest",
 			" local_shots=", _test_fires, " confirmed=", _test_received, " ack=", _ack,
 			" local_z=", snappedf(local_player.position.z, 0.001), " other_z=", snappedf(remote_player.position.z, 0.001))

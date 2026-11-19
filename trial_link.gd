@@ -14,7 +14,7 @@ const INPUT_HISTORY := 4
 const MAX_SEQUENCE := 2147483647
 const MAX_SNAPSHOT_BYTES := 16384
 const MAX_SHOT_BYTES := 2048
-const BUTTONS := [&"jump", &"crouch", &"walk", &"fire", &"reload", &"fire_pressed"]
+const BUTTONS := [&"jump", &"crouch", &"walk", &"fire", &"reload", &"fire_pressed", &"jump_held"]
 
 var is_host := false
 var active := false
@@ -161,7 +161,7 @@ func send_input(command: Dictionary) -> void:
 		if command.get(BUTTONS[i], false):
 			buttons |= 1 << i
 	encoded.encode_u16(20, buttons)
-	encoded.encode_s16(22, clampi(int(command.get("weapon", -1)), -1, 1))
+	encoded.encode_s16(22, clampi(int(command.get("weapon", -1)), -1, TrialFighter.KNIFE))
 	_last_sent = seq
 	_sent_inputs.append(encoded)
 	if _sent_inputs.size() > INPUT_HISTORY:
@@ -194,7 +194,7 @@ func _receive_inputs(batch: PackedByteArray) -> void:
 			continue
 		if not is_finite(yaw) or absf(yaw) > 100000.0 or not is_finite(pitch) or absf(pitch) > PI * 0.5 + 0.001:
 			continue
-		if weapon < -1 or weapon > 1:
+		if weapon < -1 or weapon > TrialFighter.KNIFE:
 			continue
 		var command := {"seq": seq, "move": move.limit_length(1.0), "yaw": wrapf(yaw, -PI, PI), "pitch": pitch}
 		if weapon >= 0:
