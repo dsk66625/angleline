@@ -50,6 +50,7 @@ var _general_page: VBoxContainer
 var _crosshair_page: VBoxContainer
 var _general_tab: Button
 var _crosshair_tab: Button
+var _footer: HBoxContainer
 var _preview: Reticle
 var _shape: OptionButton
 var _color: ColorPickerButton
@@ -95,6 +96,8 @@ func fit_render_size(render_size: Vector2i) -> void:
 	_root.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	_root.scale = Vector2.ONE * ui_scale
 	_root.size = Vector2(render_size) / ui_scale
+	crosshair.set_render_height(render_size.y)
+	_preview.set_render_height(render_size.y)
 
 func _box(fill: Color, outline: Color, horizontal: float, vertical: float) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
@@ -310,12 +313,23 @@ func _build_pause() -> void:
 	_settings_error = _label("", 13, Color("#ffc68e"))
 	body.add_child(_settings_error)
 	_settings_error.hide()
-	var footer := HBoxContainer.new()
-	body.add_child(footer)
-	footer.add_child(_label("Esc 放弃更改并返回", 13, MUTED))
-	_spacer(footer)
-	_button(footer, "复位练习", func() -> void: reset_requested.emit())
-	_button(footer, "退出", func() -> void: quit_requested.emit())
+	_footer = HBoxContainer.new()
+	body.add_child(_footer)
+	_footer.add_child(_label("Esc 放弃更改并返回", 13, MUTED))
+	_spacer(_footer)
+	_button(_footer, "复位练习", func() -> void: reset_requested.emit())
+	_button(_footer, "退出", func() -> void: quit_requested.emit())
+
+func mount_update_menu(menu: Control, open_menu: Callable) -> Button:
+	var button := _button(_footer, "游戏更新", open_menu)
+	_footer.move_child(button, 2)
+	_root.add_child(menu)
+	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu.visibility_changed.connect(func() -> void:
+		_center.visible = _veil.visible and not menu.visible
+		if _center.is_visible_in_tree():
+			button.grab_focus())
+	return button
 
 func _select_page(edit_crosshair: bool) -> void:
 	_general_page.visible = not edit_crosshair
@@ -361,7 +375,7 @@ func _build_crosshair_page() -> void:
 	grid.add_child(_color)
 	_color.color_changed.connect(func(_value: Color) -> void: _update_preview())
 	_length = _dimension(grid, "线长", Reticle.LENGTH_MIN, Reticle.LENGTH_MAX)
-	_gap = _dimension(grid, "中心间距", Reticle.GAP_MIN, Reticle.GAP_MAX)
+	_gap = _dimension(grid, "单侧间距", Reticle.GAP_MIN, Reticle.GAP_MAX)
 	_thickness = _dimension(grid, "粗细", Reticle.THICKNESS_MIN, Reticle.THICKNESS_MAX)
 	var flags := HBoxContainer.new()
 	_crosshair_page.add_child(flags)
@@ -370,7 +384,9 @@ func _build_crosshair_page() -> void:
 	_dynamic = _style_toggle(flags, "动态散布")
 	var defaults_row := HBoxContainer.new()
 	_crosshair_page.add_child(defaults_row)
+	defaults_row.add_child(_label("尺寸以 960p 像素计", 13, MUTED))
 	_spacer(defaults_row)
+	_button(defaults_row, "CS2 静态准星", func() -> void: _load_style(Reticle.CS2_STATIC))
 	_button(defaults_row, "恢复默认准星", func() -> void: _load_style(Reticle.DEFAULTS))
 	_load_style(Reticle.DEFAULTS)
 

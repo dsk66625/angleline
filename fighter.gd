@@ -252,6 +252,8 @@ static func ground_friction_step(speed: float, dt: float) -> float:
 	return (1.0 - pow(reference_retained, dt * GROUND_REFERENCE_HZ)) / FRICTION
 
 func spread_degrees() -> float:
+	if grounded and is_zero_approx(accuracy_speed):
+		return 0.0
 	var ratio := accuracy_speed / (float(RUN_SPEED[weapon]) * UNIT)
 	var excess_speed := maxf(ratio - ACCURATE_SPEED_RATIO, 0.0)
 	var airborne := 5.0 if not grounded else 0.0

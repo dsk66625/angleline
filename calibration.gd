@@ -39,7 +39,7 @@ func _run() -> void:
 		return
 	csv.store_csv_line(["weapon", "scenario", "phase", "tick", "time_ms", "x_displacement_u",
 			"vx_u_per_s", "grounded", "hud_spread_deg", "actual_shot_cone_deg",
-			"probe_next_shot_cone_deg", "recoil_yaw_deg", "recoil_pitch_deg", "rounds_left"])
+			"probe_next_shot_cone_deg", "recoil_yaw_deg", "recoil_pitch_deg", "rounds_left", "residual_fire_inaccuracy_deg"])
 	root.add_child(arena)
 	var ground := StaticBody3D.new()
 	var collision := CollisionShape3D.new()
@@ -64,8 +64,8 @@ func _run() -> void:
 			"units": "Signed X displacement uses game units (u). Engine positions use meters.",
 			"probe": "An independent character restores the pre-tick state and requests a real shot with the same movement input. Blank probe cone means firing was unavailable or untested.",
 			"full_accuracy": "A legal shot has the same recorded cone as a stationary first shot within angle_epsilon_deg. Reticle spread and recoil are separate columns.",
-			"shot_recovery_90": "First sample with no more than 10% of one shot's added cone remaining. The full-accuracy mark follows the remaining tail.",
-			"counter": "First vx <= 0 is a sampled boundary. Peak forward displacement uses actual tick positions. No sub-tick crossing estimate.",
+			"shot_recovery_90": "First sample with residual firing inaccuracy at or below 10% of one shot's penalty. This residual only affects the cone while moving or airborne.",
+			"counter": "First vx <= 0 ends the sampled reversal. A null first_full_accuracy means no zero-spread shot was sampled before that boundary.",
 			"shooting": "Rifle continuously holds fire during burst. Pistol retries trigger on each physics tick. Recovery starts at the final successful shot.",
 			"trace": "trace.csv contains all per-tick observations for each weapon, scenario and phase."
 		},
@@ -108,7 +108,7 @@ func _measure_weapon(slot: int) -> Dictionary:
 	await physics_frame
 	var first_shot := actor.step({"fire": true, "fire_pressed": true}, dt)
 	var reference := actor.last_fire
-	if first_shot.is_empty() or reference <= 0.0:
+	if first_shot.is_empty() or reference != 0.0:
 		errors.append("Stationary baseline shot failed: " + WEAPONS[slot])
 	_record("stationary_baseline", "shot", 0, actor.position.x, reference)
 	var motion := {}
@@ -137,7 +137,7 @@ func _record(kind: String, phase: String, tick: int, start_x: float, actual: Var
 			str((actor.position.x - start_x) / Fighter.UNIT), str(actor.velocity.x / Fighter.UNIT),
 			str(actor.grounded), str(actor.spread_degrees()), "" if actual == null else str(actual),
 			"" if potential == null else str(potential), str(actor.recoil.x), str(actor.recoil.y),
-			str(actor.rounds[actor.weapon])])
+			str(actor.rounds[actor.weapon]), str(actor.fire_inaccuracy)])
 
 
 func _probe(command: Dictionary) -> Variant:
@@ -190,6 +190,8 @@ func _change_input(kind: String, reference: float) -> Dictionary:
 		var sample := _mark(tick, start_x)
 		if sample.distance_u > peak.distance_u:
 			peak = sample
+		if not result.has("first_within_reference_speed") and absf(sample.vx_u_per_s) <= Fighter.RUN_SPEED[actor.weapon] * Fighter.ACCURATE_SPEED_RATIO:
+			result["first_within_reference_speed"] = sample
 		if not result.has("first_full_accuracy") and potential != null and absf(float(potential) - reference) <= ANGLE_EPS_DEG:
 			result["first_full_accuracy"] = sample
 		if kind == "release" and not result.has("stopped") and absf(sample.vx_u_per_s) <= SPEED_EPS_U:
@@ -197,7 +199,11 @@ func _change_input(kind: String, reference: float) -> Dictionary:
 		if kind != "release" and not result.has("first_nonpositive_vx") and sample.vx_u_per_s <= 0.0:
 			result["first_nonpositive_vx"] = sample
 			result["last_positive_vx"] = prev
-		if result.has("first_full_accuracy") and (result.has("stopped") or result.has("first_nonpositive_vx")):
+		if result.has("stopped") or result.has("first_nonpositive_vx"):
+			if not result.has("first_full_accuracy"):
+				result["first_full_accuracy"] = null
+				if kind == "release":
+					errors.append("Stopped shot did not regain zero spread: " + WEAPONS[actor.weapon])
 			result["peak_forward_displacement"] = peak
 			return result
 		prev = sample
@@ -216,6 +222,8 @@ func _fire_and_recover(count: int, reference: float) -> Dictionary:
 		var actual: Variant = null
 		if not shot.is_empty():
 			actual = actor.last_fire
+			if actor.last_fire != 0.0:
+				errors.append("Stationary shot has random spread: %s/%s" % [WEAPONS[actor.weapon], kind])
 			shots.append({"number": shots.size() + 1, "tick": tick, "time_ms": tick * dt * 1000,
 					"actual_shot_cone_deg": actual})
 		_record(kind, "fire", tick, start_x, actual)
@@ -235,15 +243,15 @@ func _fire_and_recover(count: int, reference: float) -> Dictionary:
 			result["first_legal_shot"] = {"tick": tick, "time_ms": tick * dt * 1000,
 					"actual_shot_cone_deg": potential}
 		var recovery_margin := float(Fighter.SHOT_PENALTY[actor.weapon]) * Fighter.FIRE_RECOVERY_FRACTION
-		if potential != null and not result.has("shot_recovery_90") and float(potential) - reference <= recovery_margin:
+		if not result.has("shot_recovery_90") and actor.fire_inaccuracy <= recovery_margin:
 			result["shot_recovery_90"] = {"tick": tick, "time_ms": tick * dt * 1000,
-					"actual_shot_cone_deg": potential}
+					"residual_fire_inaccuracy_deg": actor.fire_inaccuracy}
 		if potential != null and not result.has("first_full_accuracy") and absf(float(potential) - reference) <= ANGLE_EPS_DEG:
 			result["first_full_accuracy"] = {"tick": tick, "time_ms": tick * dt * 1000,
 					"actual_shot_cone_deg": potential}
 		if actor.recoil.length() <= ANGLE_EPS_DEG and not result.has("recoil_centered"):
 			result["recoil_centered"] = {"tick": tick, "time_ms": tick * dt * 1000}
-		if result.has("first_full_accuracy") and result.has("recoil_centered"):
+		if result.has("first_full_accuracy") and result.has("recoil_centered") and result.has("shot_recovery_90"):
 			return result
 	errors.append("Failed to recover stationary first-shot accuracy: %s/%s" % [WEAPONS[actor.weapon], kind])
 	return result

@@ -8,18 +8,23 @@ const GAP_MIN := 0
 const GAP_MAX := 24
 const THICKNESS_MIN := 1
 const THICKNESS_MAX := 8
+const REFERENCE_HEIGHT := 960.0
 const DEFAULTS := {
 	"shape": Shape.CROSS, "color": Color("#cdff7a"), "length": 5, "gap": 4,
 	"thickness": 2, "dot": false, "outline": true, "dynamic": true,
 }
+const CS2_STATIC := {
+	"shape": Shape.CROSS, "color": Color.GREEN, "length": 2, "gap": 1,
+	"thickness": 2, "dot": false, "outline": false, "dynamic": false,
+}
 const OUTLINE_COLOR := Color("#202729")
-const ARMS := [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]
 const HIT_ARMS := [Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1), Vector2(1, -1)]
 
 var _style := DEFAULTS.duplicate()
 var _spread := 0.0
 var _pulsed := false
 var _hit := false
+var _render_height := 960
 
 
 static func normalize(raw: Variant) -> Dictionary:
@@ -44,6 +49,18 @@ static func normalize(raw: Variant) -> Dictionary:
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	set_notify_transform(true)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSFORM_CHANGED:
+		queue_redraw()
+
+
+func set_render_height(height: int) -> void:
+	if height != _render_height:
+		_render_height = height
+		queue_redraw()
 
 
 func apply_style(values: Dictionary) -> void:
@@ -62,26 +79,44 @@ func set_feedback(spread: float, pulsed: bool, hit: bool) -> void:
 
 
 func _draw() -> void:
-	var center := size * 0.5
+	# Draw on the render-target grid before the window applies black bars or stretch.
+	# The preview and the HUD can each have a different scale and fractional origin.
+	var canvas := get_global_transform_with_canvas()
+	var origin := (canvas * (size * 0.5)).floor()
+	draw_set_transform_matrix(canvas.affine_inverse() * Transform2D(0.0, origin))
+	var pixels := float(_render_height) / REFERENCE_HEIGHT
 	var color: Color = Color.WHITE if _pulsed else _style["color"]
-	var thickness := float(_style["thickness"])
+	var thickness := maxi(1, roundi(float(_style["thickness"]) * pixels))
+	var edge := -floori(thickness * 0.5)
+	var odd := thickness % 2
 	if _style["shape"] != Shape.DOT:
-		var gap := float(_style["gap"])
+		var gap_units := float(_style["gap"])
 		if _style["dynamic"]:
-			gap += clampf(_spread * 4.0, 0.0, 26.0)
-		for direction: Vector2 in ARMS:
-			if _style["shape"] == Shape.T and direction == Vector2.UP:
-				continue
-			var start := center + direction * gap
-			var finish := start + direction * float(_style["length"])
-			if _style["outline"]:
-				draw_line(start, finish, OUTLINE_COLOR, thickness + 2.0)
-			draw_line(start, finish, color, thickness)
+			gap_units += clampf(_spread * 4.0, 0.0, 26.0)
+		var gap := roundi(gap_units * pixels)
+		var length := maxi(1, roundi(float(_style["length"]) * pixels))
+		var arms: Array[Rect2] = [
+			Rect2(-gap - length, edge, length, thickness),
+			Rect2(gap + odd, edge, length, thickness),
+			Rect2(edge, gap + odd, thickness, length),
+		]
+		if _style["shape"] == Shape.CROSS:
+			arms.append(Rect2(edge, -gap - length, thickness, length))
+		if gap == 0 and odd == 1:
+			arms.append(Rect2(0, 0, 1, 1))
+		if _style["outline"]:
+			for arm in arms:
+				draw_rect(arm.grow(1.0), OUTLINE_COLOR)
+		for arm in arms:
+			draw_rect(arm, color)
+	var center := Vector2.ONE * (odd * 0.5)
 	if _style["dot"] or _style["shape"] == Shape.DOT:
 		var radius := thickness * 0.5
 		if _style["outline"]:
 			draw_circle(center, radius + 1.0, OUTLINE_COLOR, true, -1.0, true)
 		draw_circle(center, radius, color, true, -1.0, true)
 	if _hit:
+		draw_set_transform_matrix(Transform2D.IDENTITY)
+		var hud_center := size * 0.5
 		for direction: Vector2 in HIT_ARMS:
-			draw_line(center + direction * 7.0, center + direction * 12.0, Color.WHITE, 2.0)
+			draw_line(hud_center + direction * 7.0, hud_center + direction * 12.0, Color.WHITE, 2.0)

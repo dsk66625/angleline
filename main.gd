@@ -5,6 +5,8 @@ const Fighter = preload("res://fighter.gd")
 const HUD = preload("res://trial_hud.gd")
 const Reticle = preload("res://crosshair.gd")
 const Link = preload("res://trial_link.gd")
+const Updater = preload("res://game_updater.gd")
+const UpdateMenu = preload("res://update_menu.gd")
 const SPAWN := [Vector3(0, 0.02, 6), Vector3(3, 0.02, 6)]
 const VERTICAL_FOV := 73.739795
 const SETTINGS_PATH := "user://angleline.cfg"
@@ -19,6 +21,8 @@ var remote_player: TrialFighter
 var camera: Camera3D
 var link: TrialLink
 var hud: TrialHUD
+var updater: Updater
+var update_menu: UpdateMenu
 var active_play := false
 var aim := Vector2.ZERO
 var requested_weapon := 1
@@ -105,6 +109,13 @@ func _ready() -> void:
 	hud.leave_requested.connect(link.leave)
 	hud.reset_requested.connect(_reset_player)
 	hud.quit_requested.connect(get_tree().quit)
+	updater = Updater.new()
+	add_child(updater)
+	update_menu = UpdateMenu.new()
+	update_menu.updater = updater
+	var update_button := hud.mount_update_menu(update_menu, update_menu.open)
+	updater.changed.connect(func() -> void:
+		update_button.text = "重启可更新" if updater.state == Updater.State.READY else "游戏更新")
 	viewport_window.size_changed.connect(_sync_render_size, CONNECT_DEFERRED)
 	_load_options()
 	_apply_options()
@@ -148,6 +159,8 @@ func _ready() -> void:
 		_resume()
 		_bench_start = Time.get_ticks_usec()
 		_bench_previous = _bench_start
+	if _smoke.is_empty() and DisplayServer.get_name() != "headless":
+		updater.start.call_deferred()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(hud) and active_play and _smoke.is_empty():
@@ -156,6 +169,10 @@ func _notification(what: int) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
+			if not active_play and update_menu.visible:
+				update_menu.hide()
+				get_viewport().set_input_as_handled()
+				return
 			if not active_play and hud.dismiss_crosshair_popup():
 				get_viewport().set_input_as_handled()
 				return
