@@ -178,7 +178,7 @@ func _build_in_game() -> void:
 	var key_panel := _panel(layout, Color("#19272bd9"), Color("#53696a"), 9, 4)
 	key_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	key_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var keys := _label("WASD 移动 · 长按空格连跳 · 滚轮跳 · Ctrl 蹲 · Shift 静步 · 1 主武器 · 2 手枪 · 3 近战 · R 换弹 · F2 复位 · Esc 设置", 13, PAPER)
+	var keys := _label("WASD 移动 · 长按空格连跳 · 滚轮跳 · Ctrl 蹲 · Shift 静步 · 1 主武器 · 2 手枪 · 3 近战 · R 换弹 · F 检视 · F2 复位 · Esc 设置", 13, PAPER)
 	keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	key_panel.add_child(keys)
 
