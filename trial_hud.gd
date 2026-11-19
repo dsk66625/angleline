@@ -9,6 +9,7 @@ signal leave_requested
 signal reset_requested
 signal quit_requested
 
+const Reticle = preload("res://crosshair.gd")
 const GREEN := Color("#cdff7a")
 const PAPER := Color("#e6ece8")
 const MUTED := Color("#adbfbe")
@@ -26,10 +27,7 @@ var ammo_label: Label
 var status_label: Label
 var hit_label: Label
 var position_label: Label
-var crosshair: Control
-var spread := 0.0
-var pulsed := false
-var hit := false
+var crosshair: Reticle
 var _root: Control
 var _veil: ColorRect
 var _center: CenterContainer
@@ -48,6 +46,20 @@ var _sound: HSlider
 var _connection: Label
 var _settings_profile: Label
 var _settings_error: Label
+var _general_page: VBoxContainer
+var _crosshair_page: VBoxContainer
+var _general_tab: Button
+var _crosshair_tab: Button
+var _preview: Reticle
+var _shape: OptionButton
+var _color: ColorPickerButton
+var _length: HSlider
+var _gap: HSlider
+var _thickness: HSlider
+var _dot: CheckButton
+var _outline: CheckButton
+var _dynamic: CheckButton
+var _loading_style := false
 
 func _ready() -> void:
 	var font := SystemFont.new()
@@ -167,11 +179,10 @@ func _build_in_game() -> void:
 	keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	key_panel.add_child(keys)
 
-	crosshair = Control.new()
+	crosshair = Reticle.new()
 	_root.add_child(crosshair)
 	crosshair.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	crosshair.draw.connect(_draw_crosshair)
 	hit_label = _label("", 15, GREEN)
 	_root.add_child(hit_label)
 	hit_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -208,11 +219,23 @@ func _build_pause() -> void:
 	_settings_profile = _label("ANGLELINE  /  手感测试场", 14, GREEN)
 	body.add_child(_settings_profile)
 
+	var tabs := HBoxContainer.new()
+	body.add_child(tabs)
+	var group := ButtonGroup.new()
+	_general_tab = _button(tabs, "常规设置", _select_page.bind(false))
+	_crosshair_tab = _button(tabs, "准星设置", _select_page.bind(true))
+	for tab in [_general_tab, _crosshair_tab]:
+		tab.toggle_mode = true
+		tab.button_group = group
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_general_page = VBoxContainer.new()
+	_general_page.add_theme_constant_override("separation", 8)
+	body.add_child(_general_page)
 	var columns := GridContainer.new()
 	columns.columns = 2
 	columns.add_theme_constant_override("h_separation", 10)
 	columns.add_theme_constant_override("v_separation", 6)
-	body.add_child(columns)
+	_general_page.add_child(columns)
 	_sense = _edit(columns, "CS2 鼠标灵敏度", "1.00")
 	_axis_x = _edit(columns, "水平倍率", "1.00")
 	_axis_y = _edit(columns, "垂直倍率", "1.00")
@@ -262,7 +285,7 @@ func _build_pause() -> void:
 	_sound.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	columns.add_child(_sound)
 	var network_bar := HBoxContainer.new()
-	body.add_child(network_bar)
+	_general_page.add_child(network_bar)
 	network_bar.add_child(_label("局域网", 16, GREEN))
 	_address = LineEdit.new()
 	_address.placeholder_text = "主机 IP"
@@ -278,16 +301,144 @@ func _build_pause() -> void:
 	_button(network_bar, "加入", func() -> void: join_requested.emit(_address.text.strip_edges(), int(_port.value)))
 	_button(network_bar, "断开", func() -> void: leave_requested.emit())
 	_connection = _label("当前为离线练习", 13, MUTED)
-	body.add_child(_connection)
+	_general_page.add_child(_connection)
+	_crosshair_page = VBoxContainer.new()
+	_crosshair_page.add_theme_constant_override("separation", 8)
+	body.add_child(_crosshair_page)
+	_build_crosshair_page()
+	_select_page(false)
 	_settings_error = _label("", 13, Color("#ffc68e"))
 	body.add_child(_settings_error)
 	_settings_error.hide()
 	var footer := HBoxContainer.new()
 	body.add_child(footer)
-	footer.add_child(_label("Esc 返回测试场", 13, MUTED))
+	footer.add_child(_label("Esc 放弃更改并返回", 13, MUTED))
 	_spacer(footer)
 	_button(footer, "复位练习", func() -> void: reset_requested.emit())
 	_button(footer, "退出", func() -> void: quit_requested.emit())
+
+func _select_page(edit_crosshair: bool) -> void:
+	_general_page.visible = not edit_crosshair
+	_crosshair_page.visible = edit_crosshair
+	_general_tab.set_pressed_no_signal(not edit_crosshair)
+	_crosshair_tab.set_pressed_no_signal(edit_crosshair)
+
+func _build_crosshair_page() -> void:
+	_crosshair_page.custom_minimum_size.x = 460
+	var preview_panel := _panel(_crosshair_page, Color("#37474b"), Color("#53696a"), 12, 6)
+	var preview_body := VBoxContainer.new()
+	preview_panel.add_child(preview_body)
+	var preview_header := HBoxContainer.new()
+	preview_body.add_child(preview_header)
+	preview_header.add_child(_label("准星预览", 15, PAPER))
+	_spacer(preview_header)
+	var movement := CheckButton.new()
+	movement.text = "模拟移动"
+	preview_header.add_child(movement)
+	_preview = Reticle.new()
+	_preview.custom_minimum_size.y = 124
+	_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview_body.add_child(_preview)
+	movement.toggled.connect(func(moving: bool) -> void:
+		_preview.set_feedback(2.0 if moving else 0.0, false, false))
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 15)
+	grid.add_theme_constant_override("v_separation", 6)
+	_crosshair_page.add_child(grid)
+	grid.add_child(_label("准星形状", 15, PAPER))
+	_shape = OptionButton.new()
+	for title in ["十字", "T 形", "圆点"]:
+		_shape.add_item(title)
+	_shape.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(_shape)
+	_shape.item_selected.connect(func(_index: int) -> void: _update_preview())
+	grid.add_child(_label("准星颜色", 15, PAPER))
+	_color = ColorPickerButton.new()
+	_color.edit_alpha = false
+	_color.custom_minimum_size.y = 28
+	grid.add_child(_color)
+	_color.color_changed.connect(func(_value: Color) -> void: _update_preview())
+	_length = _dimension(grid, "线长", Reticle.LENGTH_MIN, Reticle.LENGTH_MAX)
+	_gap = _dimension(grid, "中心间距", Reticle.GAP_MIN, Reticle.GAP_MAX)
+	_thickness = _dimension(grid, "粗细", Reticle.THICKNESS_MIN, Reticle.THICKNESS_MAX)
+	var flags := HBoxContainer.new()
+	_crosshair_page.add_child(flags)
+	_dot = _style_toggle(flags, "中心点")
+	_outline = _style_toggle(flags, "描边")
+	_dynamic = _style_toggle(flags, "动态散布")
+	var defaults_row := HBoxContainer.new()
+	_crosshair_page.add_child(defaults_row)
+	_spacer(defaults_row)
+	_button(defaults_row, "恢复默认准星", func() -> void: _load_style(Reticle.DEFAULTS))
+	_load_style(Reticle.DEFAULTS)
+
+func _dimension(parent: Container, title: String, minimum: int, maximum: int) -> HSlider:
+	parent.add_child(_label(title, 15, PAPER))
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(row)
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = 1
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(slider)
+	var reading := _label(str(int(slider.value)), 15, PAPER)
+	reading.custom_minimum_size.x = 28
+	reading.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(reading)
+	slider.value_changed.connect(func(value: float) -> void:
+		reading.text = str(int(value))
+		_update_preview())
+	return slider
+
+func _style_toggle(parent: Container, title: String) -> CheckButton:
+	var toggle := CheckButton.new()
+	toggle.text = title
+	parent.add_child(toggle)
+	toggle.toggled.connect(func(_pressed: bool) -> void: _update_preview())
+	return toggle
+
+func _load_style(raw: Variant) -> void:
+	var style := Reticle.normalize(raw)
+	_loading_style = true
+	_shape.select(style["shape"])
+	_color.color = style["color"]
+	_length.value = style["length"]
+	_gap.value = style["gap"]
+	_thickness.value = style["thickness"]
+	_dot.set_pressed_no_signal(style["dot"])
+	_outline.set_pressed_no_signal(style["outline"])
+	_dynamic.set_pressed_no_signal(style["dynamic"])
+	_loading_style = false
+	_update_preview()
+
+func _edited_style() -> Dictionary:
+	return Reticle.normalize({"shape": _shape.selected, "color": _color.color,
+		"length": int(_length.value), "gap": int(_gap.value), "thickness": int(_thickness.value),
+		"dot": _dot.button_pressed, "outline": _outline.button_pressed, "dynamic": _dynamic.button_pressed})
+
+func _update_preview() -> void:
+	if _loading_style:
+		return
+	var has_lines := _shape.selected != Reticle.Shape.DOT
+	_length.editable = has_lines
+	_gap.editable = has_lines
+	_dot.disabled = not has_lines
+	_dynamic.disabled = not has_lines
+	_preview.apply_style(_edited_style())
+
+func dismiss_crosshair_popup() -> bool:
+	if _color.get_popup().visible:
+		_color.get_popup().hide()
+		return true
+	if _shape.get_popup().visible:
+		_shape.get_popup().hide()
+		return true
+	return false
 
 func _edit(parent: Container, title: String, initial: String) -> LineEdit:
 	parent.add_child(_label(title, 15, PAPER))
@@ -336,6 +487,9 @@ func _view_selected(index: int) -> void:
 	_resolution.select(best)
 
 func load_values(settings: Dictionary) -> void:
+	_settings_error.hide()
+	_load_style(settings.get("crosshair", Reticle.DEFAULTS))
+	crosshair.apply_style(_edited_style())
 	_sense.text = str(settings["sensitivity"])
 	_axis_x.text = str(settings["axis_x"])
 	_axis_y.text = str(settings["axis_y"])
@@ -354,10 +508,12 @@ func _apply_and_resume() -> void:
 	var fields := [_sense, _axis_x, _axis_y]
 	for field in fields:
 		if not field.text.is_valid_float() or float(field.text) <= 0.0 or float(field.text) > 50.0:
+			_select_page(false)
 			_settings_error.text = "灵敏度和轴向倍率请输入大于 0 且不超过 50 的数字。"
 			_settings_error.show()
 			return
 	if CAPS[_cap.selected] == -1 and (not _custom_cap.text.is_valid_int() or int(_custom_cap.text) < 30 or int(_custom_cap.text) > 2000):
+		_select_page(false)
 		_settings_error.text = "自定义帧率请输入 30 到 2000 之间的整数。"
 		_settings_error.show()
 		return
@@ -366,7 +522,7 @@ func _apply_and_resume() -> void:
 		"axis_y": float(_axis_y.text), "view": _preset.selected,
 		"resolution": RESOLUTIONS[_resolution.selected], "fullscreen": _fullscreen.button_pressed,
 		"cap": int(_custom_cap.text) if CAPS[_cap.selected] == -1 else CAPS[_cap.selected],
-		"vsync": _sync.button_pressed, "volume": int(_sound.value)})
+		"vsync": _sync.button_pressed, "volume": int(_sound.value), "crosshair": _edited_style()})
 	resumed.emit()
 
 func show_menu(visible_menu: bool) -> void:
@@ -378,16 +534,3 @@ func show_menu(visible_menu: bool) -> void:
 func connection_status(message: String) -> void:
 	status_label.text = message
 	_connection.text = message
-
-func _draw_crosshair() -> void:
-	var center := crosshair.size * 0.5
-	var gap := clampf(4.0 + spread * 4.0, 4.0, 30.0)
-	var color := Color.WHITE if pulsed else GREEN
-	for direction in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
-		var start: Vector2 = center + direction * gap
-		var finish: Vector2 = center + direction * (gap + 5.0)
-		crosshair.draw_line(start, finish, Color("#202729"), 4)
-		crosshair.draw_line(start, finish, color, 2)
-	if hit:
-		for direction in [Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1), Vector2(1, -1)]:
-			crosshair.draw_line(center + direction * 7, center + direction * 12, Color.WHITE, 2)

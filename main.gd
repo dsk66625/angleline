@@ -3,6 +3,7 @@ extends Node3D
 const Arena = preload("res://world.gd")
 const Fighter = preload("res://fighter.gd")
 const HUD = preload("res://trial_hud.gd")
+const Reticle = preload("res://crosshair.gd")
 const Link = preload("res://trial_link.gd")
 const SPAWN := [Vector3(0, 0.02, 6), Vector3(3, 0.02, 6)]
 const VERTICAL_FOV := 73.739795
@@ -10,7 +11,8 @@ const SETTINGS_PATH := "user://angleline.cfg"
 const TICK := 1.0 / 128.0
 
 var options := {"sensitivity": 1.0, "axis_x": 1.0, "axis_y": 1.0, "view": 0,
-	"resolution": Vector2i.ZERO, "fullscreen": false, "cap": 0, "vsync": false, "volume": 65}
+	"resolution": Vector2i.ZERO, "fullscreen": false, "cap": 0, "vsync": false, "volume": 65,
+	"crosshair": Reticle.DEFAULTS.duplicate()}
 var _last_window_target := Vector2i(-1, -1)
 var local_player: TrialFighter
 var remote_player: TrialFighter
@@ -154,6 +156,9 @@ func _notification(what: int) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
+			if not active_play and hud.dismiss_crosshair_popup():
+				get_viewport().set_input_as_handled()
+				return
 			if active_play:
 				_pause()
 			else:
@@ -182,6 +187,7 @@ func _pause() -> void:
 	_fire_pressed = false
 	_reload_pressed = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	hud.load_values(options)
 	hud.show_menu(true)
 
 func _resume() -> void:
@@ -212,6 +218,7 @@ func _load_options() -> void:
 			options["view"] = 0
 	options["cap"] = clampi(options["cap"], 0, 2000)
 	options["volume"] = clampi(options["volume"], 0, 100)
+	options["crosshair"] = Reticle.normalize(options["crosshair"])
 
 func _save_options(values: Dictionary) -> void:
 	options = values
@@ -223,6 +230,7 @@ func _save_options(values: Dictionary) -> void:
 		push_warning("Could not save angleline.cfg")
 
 func _apply_options() -> void:
+	hud.crosshair.apply_style(options["crosshair"])
 	var window := get_window()
 	Engine.max_fps = options["cap"]
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if options["vsync"] else DisplayServer.VSYNC_DISABLED)
@@ -515,13 +523,7 @@ func _process(dt: float) -> void:
 			if _tracer_timers[index] <= 0.0:
 				_tracer_pool[index].hide()
 	var shown_spread := snappedf(local_player.spread_degrees(), 0.1)
-	var flash := _flash_time > 0.0
-	var hit := _hit_time > 0.0
-	if hud.spread != shown_spread or hud.pulsed != flash or hud.hit != hit:
-		hud.spread = shown_spread
-		hud.pulsed = flash
-		hud.hit = hit
-		hud.crosshair.queue_redraw()
+	hud.crosshair.set_feedback(shown_spread, _flash_time > 0.0, _hit_time > 0.0)
 	hud.hit_label.modulate.a = clampf(_hit_time * 9.0, 0.0, 1.0)
 	_performance.append(dt * 1000.0)
 	_performance_elapsed += dt
