@@ -53,7 +53,8 @@ var last_fire := 0.0
 var _collider: CollisionShape3D
 var _shape: BoxShape3D
 var _avatar: Node3D
-var _avatar_gun: MeshInstance3D
+var _avatar_rifle: Node3D
+var _avatar_pistol: Node3D
 var _avatar_knife: Node3D
 var _stance := 0.0
 var _fire_held := false
@@ -85,16 +86,20 @@ func show_avatar(color: Color) -> void:
 	_piece(Vector3(0.32, 0.32, 0.30), Vector3(0, 1.55, 0), trim)
 	_piece(Vector3(0.18, 0.58, 0.19), Vector3(-0.16, 0.42, 0), trim)
 	_piece(Vector3(0.18, 0.58, 0.19), Vector3(0.16, 0.42, 0), trim)
-	_avatar_gun = _piece(Vector3(0.15, 0.13, 0.65), Vector3(0.27, 1.17, -0.33), trim)
+	var mats := VmWeapons.materials()
+	_avatar_rifle = VmWeapons.build_rifle(mats, false)
+	_avatar_rifle.position = Vector3(0.27, 1.17, -0.20)
+	_avatar_rifle.rotation = Vector3(-0.05, 0, 0)
+	_avatar_rifle.get_node("Flash").visible = false
+	_avatar.add_child(_avatar_rifle)
+	_avatar_pistol = VmWeapons.build_pistol(mats, false)
+	_avatar_pistol.position = Vector3(0.27, 1.15, -0.16)
+	_avatar_pistol.get_node("Flash").visible = false
+	_avatar.add_child(_avatar_pistol)
 	_avatar_knife = Node3D.new()
 	_avatar_knife.position = Vector3(0.27, 1.15, -0.16)
 	_avatar.add_child(_avatar_knife)
-	var steel := StandardMaterial3D.new()
-	steel.albedo_color = Color("#a9b7b8")
-	steel.metallic = 0.65
-	_piece(Vector3(0.05, 0.07, 0.13), Vector3(0, 0, -0.05), trim, _avatar_knife)
-	_piece(Vector3(0.075, 0.10, 0.025), Vector3(0, 0, -0.12), trim, _avatar_knife)
-	_piece(Vector3(0.018, 0.065, 0.21), Vector3(0, 0, -0.23), steel, _avatar_knife)
+	_avatar_knife.add_child(VmWeapons.build_knife(mats, false))
 	_apply_stance()
 	_show_avatar_weapon()
 
@@ -111,8 +116,8 @@ func _piece(size: Vector3, location: Vector3, material: Material, parent: Node3D
 
 func _show_avatar_weapon() -> void:
 	if is_instance_valid(_avatar):
-		_avatar_gun.visible = weapon != KNIFE
-		_avatar_gun.scale.z = 0.55 if weapon == PISTOL else 1.0
+		_avatar_rifle.visible = weapon == RIFLE
+		_avatar_pistol.visible = weapon == PISTOL
 		_avatar_knife.visible = weapon == KNIFE
 
 func _swing_avatar_knife() -> void:

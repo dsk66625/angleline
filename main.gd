@@ -11,7 +11,6 @@ const SPAWN := [Vector3(0, 0.02, 6), Vector3(3, 0.02, 6)]
 const VERTICAL_FOV := 73.739795
 const SETTINGS_PATH := "user://angleline.cfg"
 const TICK := 1.0 / 128.0
-const SWING_DURATION := 0.26
 
 var options := {"sensitivity": 1.0, "axis_x": 1.0, "axis_y": 1.0, "view": 0,
 	"resolution": Vector2i.ZERO, "fullscreen": false, "cap": 0, "vsync": false, "volume": 65,
@@ -44,15 +43,12 @@ var _last_snapshot := -1
 var _silence := 0
 var _pending_snapshot: Dictionary = {}
 var _hit_time := 0.0
-var _flash_time := 0.0
 var _number_hits := 0
 var _performance: Array[float] = []
 var _performance_elapsed := 0.0
 var _last_info := ""
-var _rig: Node3D
-var _weapon_models: Array[Node3D] = []
-var _swing_time := 0.0
-var _muzzle: MeshInstance3D
+var _viewmodel: VmRig
+var _aim_prior := Vector2.ZERO
 var _tracer_pool: Array[MeshInstance3D] = []
 var _tracer_timers := PackedFloat32Array()
 var _tracer_next := 0
@@ -191,6 +187,7 @@ func _input(event: InputEvent) -> void:
 				KEY_3: requested_weapon = Fighter.KNIFE
 				KEY_SPACE: _jump_pressed = true
 				KEY_R: _reload_pressed = true
+				KEY_F: _viewmodel.inspect()
 				KEY_F2: _reset_player()
 	if not active_play:
 		return
@@ -487,10 +484,7 @@ func _cast(shot: Dictionary, shooter: TrialFighter) -> Dictionary:
 
 func _local_shot(shot: Dictionary) -> void:
 	var impact := _cast(shot, local_player)
-	if shot["weapon"] == Fighter.KNIFE:
-		_swing_time = SWING_DURATION
-	else:
-		_flash_time = 0.042
+	_viewmodel.notify_attack(shot["weapon"])
 	_feedback(impact, true)
 	if link.is_host and link.remote_ready:
 		impact["slot"] = 0
@@ -547,25 +541,17 @@ func _process(dt: float) -> void:
 	if link.remote_ready and not link.is_host and is_instance_valid(remote_player):
 		_proxy_elapsed += dt
 		remote_player.global_position = _proxy_from.lerp(_proxy_to, clampf(_proxy_elapsed * 64.0, 0.0, 1.0))
-	_flash_time = maxf(_flash_time - dt, 0.0)
 	_hit_time = maxf(_hit_time - dt, 0.0)
-	_swing_time = maxf(_swing_time - dt, 0.0) if local_player.weapon == Fighter.KNIFE else 0.0
-	var swing := sin(PI * _swing_time / SWING_DURATION)
-	_muzzle.visible = _flash_time > 0.0 and local_player.weapon != Fighter.KNIFE
-	_muzzle.position.z = -0.21 if local_player.weapon == Fighter.PISTOL else -0.56
-	_rig.position = Vector3(0.33, -0.29, -0.64 + minf(recoil.y * 0.009, 0.07))
-	if local_player.weapon == Fighter.KNIFE:
-		_rig.position = Vector3(0.29 - 0.25 * swing, -0.20 + 0.08 * swing, -0.76)
-	_rig.rotation = Vector3(-local_player.reloading * 0.15, 0.5 * swing, 0.7 * swing)
-	for index in _weapon_models.size():
-		_weapon_models[index].visible = local_player.weapon == index
+	var look_delta := aim - _aim_prior
+	_aim_prior = aim
+	_viewmodel.tick(dt, local_player, look_delta)
 	for index in _tracer_pool.size():
 		if _tracer_timers[index] > 0.0:
 			_tracer_timers[index] -= dt
 			if _tracer_timers[index] <= 0.0:
 				_tracer_pool[index].hide()
 	var shown_spread := snappedf(local_player.spread_degrees(), 0.1)
-	hud.crosshair.set_feedback(shown_spread, _muzzle.visible, _hit_time > 0.0)
+	hud.crosshair.set_feedback(shown_spread, _viewmodel.firing(), _hit_time > 0.0)
 	hud.hit_label.modulate.a = clampf(_hit_time * 9.0, 0.0, 1.0)
 	_performance.append(dt * 1000.0)
 	_performance_elapsed += dt
@@ -622,45 +608,9 @@ func _build_presentation() -> void:
 	_audio = AudioStreamPlayer.new()
 	add_child(_audio)
 	_sounds = [_weapon_sound(Fighter.PISTOL), _weapon_sound(Fighter.RIFLE), _weapon_sound(Fighter.KNIFE)]
-	_rig = Node3D.new()
-	camera.add_child(_rig)
-	var steel := _material(Color("#354144"))
-	var rubber := _material(Color("#181f25"))
-	var accent := _material(Color("#83917c"))
-	var fist := _material(Color("#536055"))
-	_solid(_rig, Vector3(0.22, 0.20, 0.23), Vector3(0.055, -0.12, 0.20), fist)
-	var pistol := Node3D.new()
-	_rig.add_child(pistol)
-	_solid(pistol, Vector3(0.115, 0.092, 0.34), Vector3(0, 0.02, -0.02), steel)
-	_solid(pistol, Vector3(0.092, 0.16, 0.115), Vector3(0, -0.08, 0.06), rubber)
-	_solid(pistol, Vector3(0.022, 0.020, 0.025), Vector3(0, 0.073, -0.15), accent)
-	var rifle := Node3D.new()
-	_rig.add_child(rifle)
-	_solid(rifle, Vector3(0.14, 0.12, 0.43), Vector3(0, 0.018, -0.13), steel)
-	_solid(rifle, Vector3(0.115, 0.10, 0.21), Vector3(0, 0.012, -0.29), accent)
-	_solid(rifle, Vector3(0.054, 0.054, 0.32), Vector3(0, 0.04, -0.37), rubber)
-	_solid(rifle, Vector3(0.095, 0.21, 0.11), Vector3(0, -0.085, -0.075), rubber)
-	_solid(rifle, Vector3(0.10, 0.085, 0.33), Vector3(0, -0.01, 0.18), rubber)
-	_solid(rifle, Vector3(0.042, 0.05, 0.055), Vector3(0, 0.096, -0.26), steel)
-	var knife := Node3D.new()
-	_rig.add_child(knife)
-	knife.position = Vector3(0.05, -0.11, 0.16)
-	knife.rotation_degrees = Vector3(-41, 10, 26)
-	_solid(knife, Vector3(0.054, 0.17, 0.052), Vector3(0, 0.05, 0), rubber)
-	_solid(knife, Vector3(0.105, 0.026, 0.054), Vector3(0, 0.14, 0), steel)
-	var blade_shape := PrismMesh.new()
-	blade_shape.size = Vector3(0.084, 0.29, 0.028)
-	blade_shape.left_to_right = 0.86
-	blade_shape.material = _material(Color("#72868c"))
-	var blade := MeshInstance3D.new()
-	blade.mesh = blade_shape
-	blade.position.y = 0.294
-	blade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	knife.add_child(blade)
-	_weapon_models = [pistol, rifle, knife]
+	_viewmodel = VmRig.new()
+	camera.add_child(_viewmodel)
 	var glow := _material(Color("#f9d38d"), true)
-	_muzzle = _solid(_rig, Vector3(0.08, 0.045, 0.10), Vector3(0, 0.04, -0.56), glow)
-	_muzzle.hide()
 	for index in 12:
 		var trace := _solid(self, Vector3(0.012, 0.012, 1.0), Vector3.ZERO, glow)
 		trace.hide()
