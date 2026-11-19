@@ -77,12 +77,12 @@ $env:APPDATA = $qa
 
 ## 备注
 
-- 工作树中另有未跟踪 `duel_check.gd` / `duel_world.gd`（含 .uid），非本次美术改动，未纳入提交，归属待逻辑侧确认。
+- D/01 决斗场（`duel_check.gd` / `duel_preview.gd` / `duel_world.gd` 及其交回文档）由并行地图任务在 `3889a9e` 提交进 `art/maps`，时间夹在本 pass 的 `7406ddf` 与版本提交 `00b1282` 之间。该提交未改 `main.gd`，主场景不引用 duel 代码，故 v0.7.1 包内为休眠内容，不影响练习模式与自检。曾出现的未跟踪 `dbg_deck.gd` 已被其归属方清理。
 - 外部素材：无。贴图与模型全部运行时程序化生成，无需登记 `ASSET_SOURCES.md`。
 
 ## 试玩包 v0.7.1（2026-11-20 导出）
 
-- 版本提交 `00b1282`（`project.godot` 0.7.0→0.7.1、`export_presets.cfg` 文件/产品版本 0.7.1.0、导出排除 `art_views.gd`）。从该提交的干净临时工作树导出，未跟踪的 `duel_*` / `dbg_deck.gd` 不在包内。
+- 版本提交 `00b1282`（`project.godot` 0.7.0→0.7.1、`export_presets.cfg` 文件/产品版本 0.7.1.0、导出排除 `art_views.gd`）。从该提交的临时工作树导出；包内含 `3889a9e` 的休眠 duel 脚本（见备注），不含任何未跟踪文件。
 - 成品：`D:\工作区\游戏成果存放\Angleline-v0.7.1-Windows-x64.zip`，已解压目录 `角线试玩 v0.7.1\Angleline.exe`（embed_pck，含 LICENSE / Godot-LICENSES / 试玩说明）。
 - 导出环境：模板 4.6.1.stable 复制自主工作树 `.toolchain/editor_data/export_templates`，隔离 APPDATA 为本树 `.toolchain/art-qa-export`，不污染日常 Godot 设置。
 - 导出包验证：`SELF_TEST PASS`（数值与基线逐字一致）。同时刻导出级对照：v0.7.0 包 2032.6 FPS / P99 0.84 ms，v0.7.1 包 1798.6 FPS / P99 1.01 ms（平均 -11.5%、P99 +0.17 ms，即贴图+深度雾成本，余量仍大）。日志在 `.toolchain/art-qa-export/`（`self-test.log`、`bench-1080p-1.log`、`bench-v070-now.log`）。
