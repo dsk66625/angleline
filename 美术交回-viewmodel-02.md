@@ -72,3 +72,11 @@
 - 剪影再对齐 ref-cs2/knife-ref2.jpg：钩刃加长放平（脊线根 (-0.020,-0.028) → 尖 (-0.170,-0.105)，约 24° 下倾而非 45°），边线为脊线平行偏移 2.4cm；柄轴改 (-0.5,-0.75,+0.42) 后倾，使指环（-X 端）落在食指顶/远离镜头侧而非腕侧；BASE_POS 刀 (0.15,-0.11,-0.32) 拉近使拳头占比接近参考。
 - 验证：SELF_TEST PASS / WEAPON_CHECK errors=0 / KZ_CHECK errors=0；22 帧目视（`vm-views-14a.log`），稳态帧 `vm-knife-settle.png` / `vm-knife-idle2.png` 与参考剪影一致。
 - 性能（同会话）：v0.9.4 包 1387.0、1372.6 FPS / P99 1.71、1.70 ms；v0.9.5 暖缓存 1441.4、1496.9 FPS / P99 1.18、1.12 ms（首跑 633.4 / 15.1 ms 为新 APPDATA 冷着色器缓存，不计入对照）。
+
+## v0.9.6 修复（用户反馈：落地武器会抖一下）
+
+- 根因：腾空偏移是 `if not player.grounded` 硬开关，着地帧单帧移除 2cm + 0.03rad → 可见抖动。
+- 修复：改指数平滑空气因子 `_air`（rate 16/s），偏移幅度收为 1.4cm / 0.02rad；起跳同样平滑进入。
+- 回归测试 `vm_land.gd`：headless 从 1.2m 落下，统计着地后 40 tick 武器 Y 逐帧最大位移，阈值 4mm；实测 1.6mm 通过（旧硬开关约 20mm 会失败）。
+- 验证：SELF_TEST PASS / WEAPON_CHECK errors=0 / KZ_CHECK errors=0；22 帧目视（`vm-views-15a.log`）。
+- 性能（同会话暖缓存）：v0.9.5 包 1468.9、1479.7 FPS / P99 1.23、1.20 ms；v0.9.6 包 1433.2、1411.2 FPS / P99 1.17、1.20 ms（漂移区间内，无回归）。
