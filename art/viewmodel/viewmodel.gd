@@ -29,7 +29,6 @@ var _kick := Vector3.ZERO
 var _kick_rot := Vector3.ZERO
 var _sway := Vector2.ZERO
 var _dip := 0.0
-var _bob := 0.0
 var _clock := 0.0
 var _was_grounded := true
 var _alt := 1.0
@@ -39,6 +38,14 @@ var _sup_live := false
 
 
 func _ready() -> void:
+	# Short-range fill light: only the viewmodel is inside its radius, so the
+	# gun and hands get form without touching the map's lighting.
+	var fill := OmniLight3D.new()
+	fill.position = Vector3(0.22, -0.02, -0.30)
+	fill.omni_range = 1.15
+	fill.light_energy = 0.32
+	fill.light_color = Color("#fff2df")
+	add_child(fill)
 	weapons = VmWeapons.build_all()
 	for weapon in weapons:
 		weapon.visible = false
@@ -168,8 +175,6 @@ func tick(dt: float, player: TrialFighter, look_delta: Vector2) -> void:
 	_was_grounded = player.grounded
 	var sway_target := Vector2(clampf(-look_delta.x * 6.0, -0.03, 0.03), clampf(look_delta.y * 6.0, -0.03, 0.03))
 	_sway = _sway.lerp(sway_target, 1.0 - exp(-10.0 * dt))
-	var ratio := clampf(player.accuracy_speed / (TrialFighter.RUN_SPEED[player.weapon] * TrialFighter.UNIT), 0.0, 1.4)
-	_bob += dt * (5.0 + 7.0 * ratio) * ratio
 	if _weapon < 0:
 		return
 	var root := weapons[_weapon]
@@ -199,8 +204,8 @@ func tick(dt: float, player: TrialFighter, look_delta: Vector2) -> void:
 		rot += Vector3(0.10 * sin(PI * s), 0.7 - 1.5 * s, 0.55 * sin(PI * s))
 	pos += _kick
 	rot += _kick_rot
-	pos += Vector3(sin(_bob) * 0.010 * ratio, sin(_bob * 2.0) * 0.014 * ratio - _dip, 0.0)
-	rot += Vector3(_dip * 2.0, 0.0, sin(_bob) * 0.02 * ratio)
+	pos += Vector3(0.0, -_dip, 0.0)
+	rot += Vector3(_dip * 2.0, 0.0, 0.0)
 	pos += Vector3(_sway.x, _sway.y, 0.0)
 	rot += Vector3(_sway.y * 1.2, -_sway.x * 1.2, 0.0)
 	if not player.grounded:

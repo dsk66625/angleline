@@ -109,43 +109,15 @@ static func extrude_z(parts: Dictionary, key: String, col: Color, profile: Packe
 			tool.add_vertex(vertex)
 	var cap := Geometry2D.triangulate_polygon(profile)
 	for i in range(0, cap.size(), 3):
-		for side in [-1.0, 1.0]:
-			var normal := Vector3(0, 0, side)
-			for k in [0, 1, 2]:
-				var p := profile[cap[i + k]]
-				tool.set_normal(normal)
-				tool.add_vertex(Vector3(p.x, p.y, side * half))
-	var mesh := ArrayMesh.new()
-	tool.commit(mesh)
-	_add(parts, key, mesh, pos, rot, col)
-
-
-## Closed profile given as (z, y) pairs, extruded along X. half_width per vertex
-## lets the spine stay thick while the cutting edge tapers to a grind.
-static func extrude_x(parts: Dictionary, key: String, col: Color, profile: PackedVector2Array, widths: PackedFloat32Array, pos: Vector3, rot := Vector3.ZERO) -> void:
-	var tool := SurfaceTool.new()
-	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var count := profile.size()
-	var centroid := Vector2.ZERO
-	for p in profile:
-		centroid += p
-	centroid /= float(count)
-	for i in count:
-		var j := (i + 1) % count
-		var ti := widths[i]
-		var tj := widths[j]
-		var a := Vector3(-ti, profile[i].y, profile[i].x)
-		var b := Vector3(-tj, profile[j].y, profile[j].x)
-		var c := Vector3(tj, profile[j].y, profile[j].x)
-		var d := Vector3(ti, profile[i].y, profile[i].x)
-		var normal := (b - a).cross(d - a).normalized()
-		var mid := (a + b + c + d) * 0.25
-		var outward := Vector3(0, mid.y - centroid.y, mid.z - centroid.x)
-		if normal.dot(outward) < 0.0:
-			normal = -normal
-		for vertex in [a, b, c, a, c, d]:
-			tool.set_normal(normal)
-			tool.add_vertex(vertex)
+		# +Z cap keeps CCW order; -Z cap reverses it so both face outward.
+		for k in [0, 1, 2]:
+			var p := profile[cap[i + k]]
+			tool.set_normal(Vector3(0, 0, 1))
+			tool.add_vertex(Vector3(p.x, p.y, half))
+		for k in [0, 2, 1]:
+			var p := profile[cap[i + k]]
+			tool.set_normal(Vector3(0, 0, -1))
+			tool.add_vertex(Vector3(p.x, p.y, -half))
 	var mesh := ArrayMesh.new()
 	tool.commit(mesh)
 	_add(parts, key, mesh, pos, rot, col)
@@ -153,6 +125,8 @@ static func extrude_x(parts: Dictionary, key: String, col: Color, profile: Packe
 
 ## Closed profile in XY with per-vertex half thickness along Z: a blade whose
 ## curve lies in the profile plane and whose grind tapers spine -> edge.
+## Both broad faces are capped with the per-vertex thickness so the blade is
+## a solid, never an open ribbon you can see inside.
 static func extrude_z_taper(parts: Dictionary, key: String, col: Color, profile: PackedVector2Array, widths: PackedFloat32Array, pos: Vector3, rot := Vector3.ZERO) -> void:
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -174,8 +148,35 @@ static func extrude_z_taper(parts: Dictionary, key: String, col: Color, profile:
 		var outward := Vector3(mid.x - centroid.x, mid.y - centroid.y, 0)
 		if normal.dot(outward) < 0.0:
 			normal = -normal
-		for vertex in [a, b, c, a, c, d]:
-			tool.set_normal(normal)
+			for vertex in [a, d, c, a, c, b]:
+				tool.set_normal(normal)
+				tool.add_vertex(vertex)
+		else:
+			for vertex in [a, b, c, a, c, d]:
+				tool.set_normal(normal)
+				tool.add_vertex(vertex)
+	var cap := Geometry2D.triangulate_polygon(profile)
+	for i in range(0, cap.size(), 3):
+		var p0 := profile[cap[i]]
+		var p1 := profile[cap[i + 1]]
+		var p2 := profile[cap[i + 2]]
+		var w0 := widths[cap[i]]
+		var w1 := widths[cap[i + 1]]
+		var w2 := widths[cap[i + 2]]
+		var f0 := Vector3(p0.x, p0.y, w0)
+		var f1 := Vector3(p1.x, p1.y, w1)
+		var f2 := Vector3(p2.x, p2.y, w2)
+		var n_front := (f1 - f0).cross(f2 - f0).normalized()
+		if n_front.z < 0.0:
+			n_front = -n_front
+		for vertex in [f0, f1, f2]:
+			tool.set_normal(n_front)
+			tool.add_vertex(vertex)
+		var b0 := Vector3(p0.x, p0.y, -w0)
+		var b1 := Vector3(p1.x, p1.y, -w1)
+		var b2 := Vector3(p2.x, p2.y, -w2)
+		for vertex in [b0, b2, b1]:
+			tool.set_normal(-n_front)
 			tool.add_vertex(vertex)
 	var mesh := ArrayMesh.new()
 	tool.commit(mesh)
