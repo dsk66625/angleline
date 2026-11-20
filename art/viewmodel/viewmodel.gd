@@ -12,8 +12,8 @@ extends Node3D
 const DEPLOY := 0.22
 const SWING := 0.26
 const INSPECT_TIME := [3.4, 3.0, 3.2]
-const BASE_POS := [Vector3(0.16, -0.075, -0.42), Vector3(0.15, -0.10, -0.52), Vector3(0.14, -0.11, -0.40)]
-const BASE_ROT := [Vector3(-0.02, 0.10, 0.02), Vector3(-0.02, 0.10, 0.02), Vector3(0.0, 0.6, 0.0)]
+const BASE_POS := [Vector3(0.16, -0.075, -0.42), Vector3(0.15, -0.10, -0.52), Vector3(0.16, -0.12, -0.36)]
+const BASE_ROT := [Vector3(-0.02, 0.10, 0.02), Vector3(-0.02, 0.10, 0.02), Vector3.ZERO]
 
 var weapons: Array[Node3D] = []
 var _weapon := -1
@@ -28,9 +28,7 @@ var _cycle := 0.0
 var _kick := Vector3.ZERO
 var _kick_rot := Vector3.ZERO
 var _sway := Vector2.ZERO
-var _dip := 0.0
 var _clock := 0.0
-var _was_grounded := true
 var _alt := 1.0
 var _r := {}
 var _fire_live := false
@@ -169,10 +167,6 @@ func tick(dt: float, player: TrialFighter, look_delta: Vector2) -> void:
 	var damp := 1.0 - exp(-14.0 * dt)
 	_kick = _kick.lerp(Vector3.ZERO, damp)
 	_kick_rot = _kick_rot.lerp(Vector3.ZERO, damp)
-	_dip = lerpf(_dip, 0.0, 1.0 - exp(-8.0 * dt))
-	if player.grounded and not _was_grounded:
-		_dip = 0.05
-	_was_grounded = player.grounded
 	var sway_target := Vector2(clampf(-look_delta.x * 6.0, -0.03, 0.03), clampf(look_delta.y * 6.0, -0.03, 0.03))
 	_sway = _sway.lerp(sway_target, 1.0 - exp(-10.0 * dt))
 	if _weapon < 0:
@@ -204,8 +198,6 @@ func tick(dt: float, player: TrialFighter, look_delta: Vector2) -> void:
 		rot += Vector3(0.10 * sin(PI * s), 0.7 - 1.5 * s, 0.55 * sin(PI * s))
 	pos += _kick
 	rot += _kick_rot
-	pos += Vector3(0.0, -_dip, 0.0)
-	rot += Vector3(_dip * 2.0, 0.0, 0.0)
 	pos += Vector3(_sway.x, _sway.y, 0.0)
 	rot += Vector3(_sway.y * 1.2, -_sway.x * 1.2, 0.0)
 	if not player.grounded:
