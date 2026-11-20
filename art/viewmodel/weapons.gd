@@ -187,18 +187,26 @@ static func build_pistol(mats: Dictionary, hands := true) -> Node3D:
 static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	var root := Node3D.new()
 	root.name = "KnifeKarambit"
+	# CS2 reverse grip: palm / thumb side toward the camera, ring buried in the
+	# fist at the index loop, handle exposed only below the pinky, blade hook
+	# authored in the screen plane so its broad face always reads.
+	var a0 := Vector3(-0.55, -0.75, -0.35).normalized()
+	var yc := Vector3(0.66, -0.155, -0.705)
+	yc = (yc - a0 * yc.dot(a0)).normalized()
+	var zc := a0.cross(yc).normalized()
+	var basis := Basis(a0, yc, zc)
+	var handle_center := a0 * 0.0075
+	var palm_dir := -yc
+	var palm_center := handle_center - palm_dir * 0.027
+	var holder_tf := Transform3D(basis, palm_center)
 	var holder: Node3D
+	var fist := VmHands.wrap_pose(Vector3.ZERO, Vector3(1, 0, 0), Vector3(0, -1, 0), Vector3(0, 0, -1), 0.014, 0.5)
+	var kpose: Dictionary = fist["pose"].duplicate()
+	kpose["index"] = Vector2(1.0, 1.25)
 	if hands:
-		var a0 := Vector3(-0.45, -0.80, -0.40).normalized()
-		var p0 := Vector3(-0.697, 0.598, -0.402)
-		p0 = (p0 - a0 * p0.dot(a0)).normalized()
-		var b0 := Basis(a0, -p0, -a0.cross(p0))
-		var solve := VmHands.wrap_pose(b0 * Vector3(0.010, -0.035, -0.105), a0, b0 * Vector3(0, -1, 0), b0 * Vector3(-0.5608, -0.0979, 0.8267), 0.014, 0.5)
-		var kpose: Dictionary = solve["pose"].duplicate()
-		kpose["index"] = Vector2(1.0, 1.25)
-		var rig := VmHands.build(mats, VmHands.RIGHT, kpose, {"middle": 1, "ring": 1, "pinky": 1}, true, solve["dip"])
-		VmHands.place(rig, solve)
-		VmHands.curl(rig, "index", 1.0, 1.25)
+		var rig := VmHands.build(mats, VmHands.RIGHT, kpose, {"middle": 1, "ring": 1, "pinky": 1}, true, fist["dip"])
+		rig["root"].transform = holder_tf
+		rig["root"].set_meta("home", holder_tf)
 		rig["root"].name = "HandFire"
 		rig["rest_pose"] = kpose
 		root.add_child(rig["root"])
@@ -207,29 +215,31 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	else:
 		holder = Node3D.new()
 		holder.name = "HandFire"
-		var a := Vector3(-0.45, -0.80, -0.40).normalized()
-		var p := Vector3(-0.697, 0.598, -0.402)
-		p = (p - a * p.dot(a)).normalized()
-		holder.transform = Transform3D(Basis(a, -p, -a.cross(p)), Vector3.ZERO)
-		holder.set_meta("home", holder.transform)
+		holder.transform = holder_tf
+		holder.set_meta("home", holder_tf)
 		root.add_child(holder)
-	# Handle through the fist, pommel ring at the index loop, hawkbill blade
-	# with a real grind (spine thick, edge tapered) leaving the pinky side.
+	# Handle + ring in hand-local space (along the curl axis, palm-side offset).
 	var knife := {}
-	VmGeo.bevel(knife, VmGeo.MATTE, POLYMER, Vector3(0.028, 0.028, 0.085), Vector3(0.010, -0.035, -0.105), Vector3(0, PI * 0.5, 0), 0.008)
+	var handle := {}
+	VmGeo.bevel(handle, VmGeo.MATTE, POLYMER, Vector3(0.028, 0.028, 0.065), Vector3(0.0075, 0, 0), Vector3(0, PI * 0.5, 0), 0.008)
 	for i in 3:
-		VmGeo.cyl(knife, VmGeo.MATTE, STEEL_DARK, 0.006, 0.026, Vector3(-0.006 + i * 0.018, -0.024, -0.105), Vector3(0, 0, PI * 0.5), 8)
-	VmGeo.torus(knife, VmGeo.METAL, BLADE, 0.019, 0.004, Vector3(-0.040, -0.035, -0.105), Vector3(0, 0, PI * 0.5))
-	# Blade sits in front of the fist plane (camera side) with a tang back to
-	# the handle, so the hook is never hidden behind the palm.
+		VmGeo.cyl(handle, VmGeo.MATTE, STEEL_DARK, 0.006, 0.026, Vector3(-0.004 + i * 0.016, 0.012, 0), Vector3(0, 0, PI * 0.5), 8)
+	VmGeo.torus(handle, VmGeo.METAL, BLADE, 0.019, 0.004, Vector3(-0.020, 0, 0), Vector3(0, 0, PI * 0.5))
+	VmHands._bake_parts(knife, handle, Transform3D(Basis.IDENTITY, Vector3(0, -0.027, 0)))
+	# Blade in weapon-local screen plane, then into hand-local space.
+	var blade := {}
+	# Thick-curve profile: spine chain + parallel offset edge chain (simple
+	# polygon, so ear-clipping always caps it).
 	var profile := PackedVector2Array([
-		Vector2(0.0400, -0.0194), Vector2(0.0982, -0.0145), Vector2(0.1419, -0.0007),
-		Vector2(0.1638, 0.0193), Vector2(0.1565, 0.0404), Vector2(0.1274, 0.0580),
-		Vector2(0.1128, 0.0442), Vector2(0.1055, 0.0268), Vector2(0.0910, 0.0092),
-		Vector2(0.0655, -0.0044), Vector2(0.0364, -0.0119)])
-	var widths := PackedFloat32Array([0.0035, 0.0035, 0.0032, 0.0026, 0.0016, 0.0005, 0.0008, 0.0014, 0.0022, 0.0030, 0.0035])
-	VmGeo.extrude_z_taper(knife, VmGeo.METAL, BLADE, profile, widths, Vector3(0, 0, -0.105))
-	var pivot := Vector3(-0.040, -0.035, -0.105)
+		Vector2(-0.0200, -0.0280), Vector2(-0.0600, -0.0420), Vector2(-0.0950, -0.0680),
+		Vector2(-0.1150, -0.1000), Vector2(-0.1180, -0.1300), Vector2(-0.1400, -0.1480),
+		Vector2(-0.1367, -0.1151), Vector2(-0.1337, -0.0851), Vector2(-0.1137, -0.0531),
+		Vector2(-0.0787, -0.0271), Vector2(-0.0387, -0.0131)])
+	var widths := PackedFloat32Array([0.0035, 0.0035, 0.0032, 0.0026, 0.0016, 0.0005, 0.0016, 0.0026, 0.0032, 0.0035, 0.0035])
+	VmGeo.extrude_z_taper(blade, VmGeo.METAL, BLADE, profile, widths, Vector3(0, 0, -0.020))
+	var to_holder := Transform3D(basis.inverse(), -(basis.inverse() * palm_center))
+	VmHands._bake_parts(knife, blade, to_holder)
+	var pivot := Vector3(-0.020, -0.027, 0)
 	var knife_node := VmGeo.pivot_node(knife, mats, pivot, "Knife")
 	holder.add_child(knife_node)
 	root.set_meta("muzzle", Vector3.ZERO)
