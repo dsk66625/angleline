@@ -190,7 +190,7 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	# CS2 reverse grip: palm / thumb side toward the camera, ring buried in the
 	# fist at the index loop, handle exposed only below the pinky, blade hook
 	# authored in the screen plane so its broad face always reads.
-	var a0 := Vector3(-0.55, -0.75, -0.35).normalized()
+	var a0 := Vector3(-0.5, -0.75, 0.42).normalized()
 	var yc := Vector3(0.66, -0.155, -0.705)
 	yc = (yc - a0 * yc.dot(a0)).normalized()
 	var zc := a0.cross(yc).normalized()
@@ -231,10 +231,10 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	# Thick-curve profile: spine chain + parallel offset edge chain (simple
 	# polygon, so ear-clipping always caps it).
 	var profile := PackedVector2Array([
-		Vector2(-0.0200, -0.0280), Vector2(-0.0600, -0.0420), Vector2(-0.0950, -0.0680),
-		Vector2(-0.1150, -0.1000), Vector2(-0.1180, -0.1300), Vector2(-0.1400, -0.1480),
-		Vector2(-0.1367, -0.1151), Vector2(-0.1337, -0.0851), Vector2(-0.1137, -0.0531),
-		Vector2(-0.0787, -0.0271), Vector2(-0.0387, -0.0131)])
+		Vector2(-0.0200, -0.0280), Vector2(-0.0650, -0.0380), Vector2(-0.1050, -0.0520),
+		Vector2(-0.1350, -0.0700), Vector2(-0.1550, -0.0880), Vector2(-0.1700, -0.1050),
+		Vector2(-0.1632, -0.0654), Vector2(-0.1432, -0.0474), Vector2(-0.1132, -0.0294),
+		Vector2(-0.0732, -0.0154), Vector2(-0.0282, -0.0054)])
 	var widths := PackedFloat32Array([0.0035, 0.0035, 0.0032, 0.0026, 0.0016, 0.0005, 0.0016, 0.0026, 0.0032, 0.0035, 0.0035])
 	VmGeo.extrude_z_taper(blade, VmGeo.METAL, BLADE, profile, widths, Vector3(0, 0, -0.020))
 	var to_holder := Transform3D(basis.inverse(), -(basis.inverse() * palm_center))

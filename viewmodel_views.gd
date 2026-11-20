@@ -75,6 +75,10 @@ func _run() -> void:
 	await _shot("knife-deploy")
 	await _ticks(40)
 	await _shot("knife-idle")
+	await _ticks(60)
+	await _shot("knife-settle")
+	var kn: Node3D = game._viewmodel.weapons[TrialFighter.KNIFE].get_node("HandFire/Knife")
+	print("VM_KNIFE_ROT idle=", kn.rotation)
 	_stats("knife")
 	game._viewmodel.inspect()
 	await _ticks(127)
@@ -83,7 +87,9 @@ func _run() -> void:
 	game._fire_pressed = true
 	await _ticks(9)
 	await _shot("knife-slash")
-	await _ticks(60)
+	await _ticks(90)
+	await _shot("knife-idle2")
+	print("VM_KNIFE_ROT late=", kn.rotation)
 	game.requested_weapon = TrialFighter.RIFLE
 	await _ticks(40)
 	game._fire_pressed = true

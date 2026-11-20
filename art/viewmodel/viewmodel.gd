@@ -12,7 +12,7 @@ extends Node3D
 const DEPLOY := 0.22
 const SWING := 0.26
 const INSPECT_TIME := [3.4, 3.0, 3.2]
-const BASE_POS := [Vector3(0.16, -0.075, -0.42), Vector3(0.15, -0.10, -0.52), Vector3(0.16, -0.12, -0.36)]
+const BASE_POS := [Vector3(0.16, -0.075, -0.42), Vector3(0.15, -0.10, -0.52), Vector3(0.15, -0.11, -0.32)]
 const BASE_ROT := [Vector3(-0.02, 0.10, 0.02), Vector3(-0.02, 0.10, 0.02), Vector3.ZERO]
 
 var weapons: Array[Node3D] = []
