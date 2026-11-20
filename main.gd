@@ -210,10 +210,11 @@ func _pause() -> void:
 	hud.load_values(options)
 	hud.show_menu(true)
 
-func _resume() -> void:
+func _resume(capture_mouse: bool = true) -> void:
 	active_play = true
 	hud.show_menu(false)
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if capture_mouse and _smoke.is_empty():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _load_options() -> void:
 	var config := ConfigFile.new()

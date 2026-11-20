@@ -22,7 +22,7 @@ func _initialize() -> void:
 func _run() -> void:
 	game = PLAY_SCENE.instantiate()
 	root.add_child(game)
-	game._resume()
+	game._resume(false)
 	player = game.local_player
 	for index in KEYS.size():
 		_tap_key(KEYS[index])

@@ -21,6 +21,8 @@
 
 ## 验证与交回
 
+Agent 在用户当前桌面用下方 `--headless` 命令调试，不操作系统鼠标、键盘或编辑器的 F5。需要模拟操作时，在测试脚本内发送游戏输入。人工试玩仍可使用 F5。
+
 以下示例在工作树根目录的独立 PowerShell 窗口运行。临时 `APPDATA` 只供该窗口启动的测试进程使用，日志和测试设置位于本工作树已忽略的 `.toolchain/art-qa`。本机两棵工作树共用已有引擎。
 
 ```powershell
@@ -33,7 +35,7 @@ $env:APPDATA = $qa
 & $godot --headless --path . --fixed-fps 128 --script res://kz_check.gd
 ```
 
-主场景自检输出 `SELF_TEST PASS`，另外两项成功时输出 `WEAPON_CHECK errors=0` 和 `KZ_CHECK errors=0`。模型和材质可用实际图形客户端从出生点查看。第一条命令保存设置页与靶场截图，第二条测量渲染表现。
+主场景自检输出 `SELF_TEST PASS`，另外两项成功时输出 `WEAPON_CHECK errors=0` 和 `KZ_CHECK errors=0`。以下图形命令在独立测试机或有独立输入会话的虚拟机中运行。第一条保存设置页与靶场截图，第二条测量渲染表现。`art_views.gd`、`viewmodel_views.gd` 和 `duel_preview.gd` 也使用该环境。环境未就绪时记录待测项并继续本机无窗口检查。
 
 ```powershell
 & $godot --path . -- --visual-test --test-view=0 --test-resolution=1920x1080

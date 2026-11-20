@@ -28,7 +28,7 @@ func _initialize() -> void:
 func _run() -> void:
 	game = PLAY_SCENE.instantiate()
 	root.add_child(game)
-	game._resume()
+	game._resume(false)
 	game.options["view"] = 0
 	game.options["resolution"] = Vector2i(1920, 1080)
 	game._apply_options()
