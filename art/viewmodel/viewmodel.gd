@@ -28,6 +28,7 @@ var _cycle := 0.0
 var _kick := Vector3.ZERO
 var _kick_rot := Vector3.ZERO
 var _sway := Vector2.ZERO
+var _air := 0.0
 var _clock := 0.0
 var _alt := 1.0
 var _r := {}
@@ -200,9 +201,10 @@ func tick(dt: float, player: TrialFighter, look_delta: Vector2) -> void:
 	rot += _kick_rot
 	pos += Vector3(_sway.x, _sway.y, 0.0)
 	rot += Vector3(_sway.y * 1.2, -_sway.x * 1.2, 0.0)
-	if not player.grounded:
-		pos += Vector3(0.0, 0.02, 0.0)
-		rot += Vector3(0.03, 0.0, 0.0)
+	# Airborne offset eases in/out instead of snapping on the landing frame.
+	_air = lerpf(_air, 0.0 if player.grounded else 1.0, 1.0 - exp(-16.0 * dt))
+	pos += Vector3(0.0, 0.014 * _air, 0.0)
+	rot += Vector3(0.02 * _air, 0.0, 0.0)
 	pos += Vector3(0.0, sin(_clock * 1.6) * 0.0035, 0.0)
 	rot += Vector3(0.0, 0.0, sin(_clock * 1.1) * 0.006)
 	var fire_live := _trigger > 0.0 or (_weapon == TrialFighter.KNIFE and _state != "idle")
