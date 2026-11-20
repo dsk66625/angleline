@@ -15,7 +15,7 @@ const STEEL := Color("#4a555e")
 const STEEL_DARK := Color("#333c44")
 const PARKER := Color("#363e45")
 const POLYMER := Color("#22282b")
-const BLADE := Color("#e2ebEE")
+const BLADE := Color("#cdd8dc")
 const BLADE_EDGE := Color("#c8d4d8")
 
 
@@ -72,6 +72,7 @@ static func build_rifle(mats: Dictionary, hands := true) -> Node3D:
 	# Trigger group, bakelite grip, wood stock and butt plate.
 	VmGeo.box(parts, VmGeo.METAL, STEEL_DARK, Vector3(0.008, 0.006, 0.070), Vector3(0, -0.072, 0.030))
 	VmGeo.box(parts, VmGeo.METAL, STEEL_DARK, Vector3(0.008, 0.026, 0.006), Vector3(0, -0.060, -0.004))
+	VmGeo.box(parts, VmGeo.METAL, STEEL_DARK, Vector3(0.008, 0.026, 0.006), Vector3(0, -0.060, 0.062))
 	VmGeo.box(parts, VmGeo.METAL, STEEL_DARK, Vector3(0.006, 0.020, 0.008), Vector3(0, -0.056, 0.020), Vector3(0.25, 0, 0))
 	VmGeo.bevel(parts, VmGeo.MATTE, BAKELITE, Vector3(0.040, 0.095, 0.040), Vector3(0, -0.085, 0.075), Vector3(0.30, 0, 0), 0.012)
 	VmGeo.bevel(parts, VmGeo.MATTE, BAKELITE, Vector3(0.042, 0.012, 0.042), Vector3(0, -0.128, 0.088), Vector3(0.30, 0, 0), 0.004)
@@ -133,6 +134,7 @@ static func build_pistol(mats: Dictionary, hands := true) -> Node3D:
 			VmGeo.box(parts, VmGeo.MATTE, STEEL_DARK, Vector3(0.0025, 0.003, 0.032), Vector3(side * 0.016, -0.038 - i * 0.016, 0.056 + i * 0.004), Vector3(0.26, 0, 0))
 	VmGeo.box(parts, VmGeo.MATTE, STEEL_DARK, Vector3(0.008, 0.006, 0.055), Vector3(0, -0.038, 0.005))
 	VmGeo.box(parts, VmGeo.MATTE, STEEL_DARK, Vector3(0.008, 0.028, 0.006), Vector3(0, -0.026, -0.020))
+	VmGeo.box(parts, VmGeo.MATTE, STEEL_DARK, Vector3(0.008, 0.028, 0.006), Vector3(0, -0.026, 0.032))
 	VmGeo.sph(parts, VmGeo.MATTE, STEEL_DARK, 0.005, Vector3(0, -0.036, -0.018), 8, 5)
 	VmGeo.box(parts, VmGeo.MATTE, STEEL_DARK, Vector3(0.006, 0.020, 0.008), Vector3(0, -0.026, 0.008), Vector3(0.20, 0, 0))
 	VmGeo.box(parts, VmGeo.METAL, STEEL_DARK, Vector3(0.003, 0.008, 0.030), Vector3(-0.0155, -0.002, 0.020))
@@ -187,11 +189,11 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	root.name = "KnifeKarambit"
 	var holder: Node3D
 	if hands:
-		var a0 := Vector3(0.8, -0.5, 0.1).normalized()
-		var p0 := Vector3(0.5, 0.8, 0.1)
+		var a0 := Vector3(-0.45, -0.80, -0.40).normalized()
+		var p0 := Vector3(-0.697, 0.598, -0.402)
 		p0 = (p0 - a0 * p0.dot(a0)).normalized()
 		var b0 := Basis(a0, -p0, -a0.cross(p0))
-		var solve := VmHands.wrap_pose(b0 * Vector3(0.010, -0.035, -0.105), a0, b0 * Vector3(0, -1, 0), b0 * Vector3(-0.13, -0.03, 0.89), 0.014, 0.5)
+		var solve := VmHands.wrap_pose(b0 * Vector3(0.010, -0.035, -0.105), a0, b0 * Vector3(0, -1, 0), b0 * Vector3(-0.5608, -0.0979, 0.8267), 0.014, 0.5)
 		var kpose: Dictionary = solve["pose"].duplicate()
 		kpose["index"] = Vector2(1.0, 1.25)
 		var rig := VmHands.build(mats, VmHands.RIGHT, kpose, {"middle": 1, "ring": 1, "pinky": 1}, true, solve["dip"])
@@ -205,8 +207,8 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	else:
 		holder = Node3D.new()
 		holder.name = "HandFire"
-		var a := Vector3(0.8, -0.5, 0.1).normalized()
-		var p := Vector3(0.5, 0.8, 0.1)
+		var a := Vector3(-0.45, -0.80, -0.40).normalized()
+		var p := Vector3(-0.697, 0.598, -0.402)
 		p = (p - a * p.dot(a)).normalized()
 		holder.transform = Transform3D(Basis(a, -p, -a.cross(p)), Vector3.ZERO)
 		holder.set_meta("home", holder.transform)
@@ -221,10 +223,10 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	# Blade sits in front of the fist plane (camera side) with a tang back to
 	# the handle, so the hook is never hidden behind the palm.
 	var profile := PackedVector2Array([
-		Vector2(0.0400, -0.0324), Vector2(0.0816, -0.0241), Vector2(0.1128, -0.0012),
-		Vector2(0.1284, 0.0321), Vector2(0.1232, 0.0674), Vector2(0.1024, 0.0966),
-		Vector2(0.0920, 0.0737), Vector2(0.0868, 0.0446), Vector2(0.0764, 0.0154),
-		Vector2(0.0582, -0.0074), Vector2(0.0374, -0.0199)])
+		Vector2(0.0400, -0.0194), Vector2(0.0982, -0.0145), Vector2(0.1419, -0.0007),
+		Vector2(0.1638, 0.0193), Vector2(0.1565, 0.0404), Vector2(0.1274, 0.0580),
+		Vector2(0.1128, 0.0442), Vector2(0.1055, 0.0268), Vector2(0.0910, 0.0092),
+		Vector2(0.0655, -0.0044), Vector2(0.0364, -0.0119)])
 	var widths := PackedFloat32Array([0.0035, 0.0035, 0.0032, 0.0026, 0.0016, 0.0005, 0.0008, 0.0014, 0.0022, 0.0030, 0.0035])
 	VmGeo.extrude_z_taper(knife, VmGeo.METAL, BLADE, profile, widths, Vector3(0, 0, -0.105))
 	var pivot := Vector3(-0.040, -0.035, -0.105)

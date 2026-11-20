@@ -18,11 +18,14 @@ static func mats() -> Dictionary:
 	matte.albedo_color = Color.WHITE
 	matte.roughness = 0.82
 	matte.metallic = 0.0
+	# Double-sided: any stray open edge can never show a hollow interior.
+	matte.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var metal := StandardMaterial3D.new()
 	metal.vertex_color_use_as_albedo = true
 	metal.albedo_color = Color.WHITE
 	metal.roughness = 0.50
 	metal.metallic = 0.25
+	metal.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var flash := StandardMaterial3D.new()
 	flash.albedo_color = Color("#ffd9a0")
 	flash.emission_enabled = true

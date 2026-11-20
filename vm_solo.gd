@@ -25,7 +25,7 @@ func _run() -> void:
 	var env := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color("#5a6a72")
+	environment.background_color = Color("#3a2430")
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color("#8fa0a8")
 	environment.ambient_light_energy = 0.7
@@ -42,13 +42,19 @@ func _run() -> void:
 	for i in builds.size():
 		var weapon: Node3D = builds[i]
 		scene.add_child(weapon)
-		for view in 2:
+		for view in 4:
 			if view == 0:
 				camera.position = Vector3(0.42, 0.10, 0.12)
 				camera.look_at(Vector3(0, -0.05, 0.02), Vector3.UP)
-			else:
-				camera.position = Vector3(0.30, 0.30, 0.42)
+			elif view == 1:
+				camera.position = Vector3(-0.42, 0.10, 0.12)
+				camera.look_at(Vector3(0, -0.05, 0.02), Vector3.UP)
+			elif view == 2:
+				camera.position = Vector3(0.20, -0.40, 0.30)
 				camera.look_at(Vector3(0, -0.06, -0.05), Vector3.UP)
+			else:
+				camera.position = Vector3(0.10, 0.35, -0.45)
+				camera.look_at(Vector3(0, -0.02, -0.10), Vector3.UP)
 			await _shot("%s-solo%d" % [names[i], view])
 		weapon.queue_free()
 		await process_frame
