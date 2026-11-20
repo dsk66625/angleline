@@ -87,19 +87,19 @@ func show_avatar(color: Color) -> void:
 	_piece(Vector3(0.18, 0.58, 0.19), Vector3(-0.16, 0.42, 0), trim)
 	_piece(Vector3(0.18, 0.58, 0.19), Vector3(0.16, 0.42, 0), trim)
 	var mats := VmWeapons.materials()
-	_avatar_rifle = VmWeapons.build_rifle(mats, false)
+	_avatar_rifle = VmWeapons.build_rifle(mats, true)
 	_avatar_rifle.position = Vector3(0.27, 1.17, -0.20)
 	_avatar_rifle.rotation = Vector3(-0.05, 0, 0)
 	_avatar_rifle.get_node("Flash").visible = false
 	_avatar.add_child(_avatar_rifle)
-	_avatar_pistol = VmWeapons.build_pistol(mats, false)
+	_avatar_pistol = VmWeapons.build_pistol(mats, true)
 	_avatar_pistol.position = Vector3(0.27, 1.15, -0.16)
 	_avatar_pistol.get_node("Flash").visible = false
 	_avatar.add_child(_avatar_pistol)
 	_avatar_knife = Node3D.new()
 	_avatar_knife.position = Vector3(0.27, 1.15, -0.16)
 	_avatar.add_child(_avatar_knife)
-	_avatar_knife.add_child(VmWeapons.build_knife(mats, false))
+	_avatar_knife.add_child(VmWeapons.build_knife(mats, true))
 	_apply_stance()
 	_show_avatar_weapon()
 
