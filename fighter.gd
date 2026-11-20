@@ -2,10 +2,11 @@ class_name TrialFighter
 extends CharacterBody3D
 
 const UNIT := 0.0254
+const RifleRecoil = preload("res://rifle_recoil.gd")
 enum { PISTOL, RIFLE, KNIFE }
 const RUN_SPEED := [240.0, 215.0, 250.0]
 const CAPACITY := [13, 30]
-const FIRE_CYCLE := [0.15, 0.10]
+const FIRE_CYCLE := [0.15, RifleRecoil.CYCLE]
 const KNIFE_REACH := 48.0 * UNIT
 const KNIFE_CYCLE := 0.4
 const HULL_WIDTH := 32.0 * UNIT
@@ -60,6 +61,7 @@ var _avatar_pistol: Node3D
 var _avatar_knife: Node3D
 var _stance := 0.0
 var _fire_held := false
+var _rifle_recoil := RifleRecoil.new()
 
 func _ready() -> void:
 	collision_layer = 2
@@ -149,6 +151,7 @@ func reset_equipment() -> void:
 	reloading = 0.0
 	streak = 0
 	recoil = Vector2.ZERO
+	_rifle_recoil.reset()
 	_fire_held = false
 
 static func look_direction(yaw_angle: float, pitch_angle: float) -> Vector3:
@@ -163,6 +166,8 @@ func step(command: Dictionary, dt: float) -> Dictionary:
 	pitch = command.get("pitch", pitch)
 	var next_weapon: int = command.get("weapon", weapon)
 	if next_weapon != weapon and next_weapon >= PISTOL and next_weapon <= KNIFE:
+		if weapon == RIFLE:
+			recoil = Vector2.ZERO
 		weapon = next_weapon
 		_show_avatar_weapon()
 		cooldown = maxf(cooldown, 0.22)
@@ -184,12 +189,18 @@ func step(command: Dictionary, dt: float) -> Dictionary:
 		speed_scale = minf(speed_scale, lerpf(1.0, 0.34, _stance))
 	move_player(direction, speed_scale, jump_speed, dt)
 
+	var previous_cooldown := cooldown
 	cooldown = maxf(cooldown - dt, -dt)
 	if weapon != KNIFE:
 		_recover_accuracy(dt)
-	recoil = recoil.move_toward(Vector2.ZERO, dt * (18.0 if streak > 0 else 25.0))
+	_rifle_recoil.advance(dt)
+	if weapon == RIFLE:
+		recoil = _rifle_recoil.aim_offset(_rifle_recoil.elapsed)
+	else:
+		recoil = recoil.move_toward(Vector2.ZERO, dt * (18.0 if streak > 0 else 25.0))
 	var held: bool = command.get("fire", false)
 	var pressed: bool = command.get("fire_pressed", false)
+	var continued_fire := held and _fire_held
 	var wants_attack := pressed or (held and (weapon != PISTOL or not _fire_held))
 	_fire_held = held
 	if weapon == KNIFE:
@@ -213,7 +224,11 @@ func step(command: Dictionary, dt: float) -> Dictionary:
 		return {}
 
 	var fire_interval: float = FIRE_CYCLE[weapon]
-	cooldown = (cooldown if streak > 0 and held and weapon == RIFLE else 0.0) + fire_interval
+	# Carry the fraction of a physics step between automatic shots at 600 RPM.
+	var lateness := 0.0
+	if weapon == RIFLE and continued_fire and previous_cooldown > 0.0 and streak > 0:
+		lateness = maxf(0.0, -cooldown)
+	cooldown = fire_interval - lateness
 	rounds[weapon] -= 1
 	shots += 1
 	last_fire = spread_degrees()
@@ -225,11 +240,15 @@ func step(command: Dictionary, dt: float) -> Dictionary:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = int(shots * 9619 + weapon * 401)
 		offset = Vector2.from_angle(rng.randf_range(0.0, TAU)) * sqrt(rng.randf()) * last_fire
-	var direction_of_shot := look_direction(yaw + deg_to_rad(recoil.x + offset.x),
-		pitch + deg_to_rad(recoil.y + offset.y))
-	var drift := sin(float(streak) * 0.63) * minf(float(streak) * 0.12, 1.10)
-	var lift := 1.45 if weapon == PISTOL else minf(0.88 + float(streak) * 0.21, 2.65)
-	recoil += Vector2(drift, lift)
+	var shot_recoil := recoil
+	if weapon == RIFLE:
+		shot_recoil = _rifle_recoil.fire(lateness)
+		recoil = _rifle_recoil.aim_offset(_rifle_recoil.elapsed)
+	else:
+		var drift := sin(float(streak) * 0.63) * minf(float(streak) * 0.12, 1.10)
+		recoil += Vector2(drift, 1.45)
+	var direction_of_shot := look_direction(yaw + deg_to_rad(shot_recoil.x + offset.x),
+		pitch + deg_to_rad(shot_recoil.y + offset.y))
 	return {"origin": eye_position(), "direction": direction_of_shot, "weapon": weapon, "shots": shots}
 
 func _recover_accuracy(dt: float) -> void:
@@ -353,7 +372,7 @@ func state() -> Dictionary:
 		"stance": _stance, "grounded": grounded, "weapon": weapon, "rounds": rounds.duplicate(),
 		"fire_inaccuracy": fire_inaccuracy, "accuracy_recovery_shots": accuracy_recovery_shots,
 		"cooldown": cooldown, "reloading": reloading, "streak": streak,
-		"shots": shots, "recoil": recoil, "fire_held": _fire_held}
+		"shots": shots, "recoil": recoil, "rifle_recoil": _rifle_recoil.state(), "fire_held": _fire_held}
 
 func restore(data: Dictionary) -> void:
 	var old_shots := shots
@@ -372,6 +391,7 @@ func restore(data: Dictionary) -> void:
 	streak = data["streak"]
 	shots = data["shots"]
 	recoil = data["recoil"]
+	_rifle_recoil.restore(data.get("rifle_recoil", {}), recoil if weapon == RIFLE else Vector2.ZERO)
 	_fire_held = data["fire_held"]
 	accuracy_speed = Vector2(velocity.x, velocity.z).length()
 	_apply_stance()

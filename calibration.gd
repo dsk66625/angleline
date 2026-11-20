@@ -285,6 +285,18 @@ func _fire_and_recover(count: int, reference: float) -> Dictionary:
 func _check_boundaries(slot: int) -> Dictionary:
 	await _reset_pair(slot)
 	var start := actor.state()
+	# Record a real burst just before its next legal shot. This includes the AK's
+	# angular velocity and timing, which its rendered recoil alone cannot reconstruct.
+	var burst := {}
+	if slot == Fighter.RIFLE:
+		for tick in 128:
+			await physics_frame
+			actor.step({"fire": actor.shots < BURST_LENGTH}, dt)
+			if actor.shots == BURST_LENGTH and actor.cooldown <= dt:
+				burst = actor.state()
+				break
+		if burst.is_empty():
+			errors.append("Could not prepare a rifle burst for the accuracy boundary")
 	var limit_u: float = Fighter.RUN_SPEED[slot] * ACCURATE_RUN_FRACTION
 	var samples := {}
 	for delta_u: float in [-0.001, 0.0, 0.001]:
@@ -299,7 +311,7 @@ func _check_boundaries(slot: int) -> Dictionary:
 		var input_fraction: float = (limit_u + delta_u) / Fighter.RUN_SPEED[slot]
 		var key := "edge_%+.3f_u_s" % delta_u
 		await physics_frame
-		samples[key] = _boundary_shot({"move": Vector2.RIGHT * input_fraction}, true, delta_u <= 0.0, key)
+		samples[key] = _boundary_shot({"move": Vector2.RIGHT * input_fraction}, true, delta_u <= 0.0, key, burst)
 		if absf(actor.accuracy_speed / Fighter.UNIT - limit_u - delta_u) > 0.00002:
 			errors.append("Shot missed the requested boundary speed: %s/%s" % [WEAPONS[slot], key])
 	for axis: Vector2 in [Vector2.RIGHT, Vector2.LEFT, Vector2(1, -1).normalized()]:
@@ -310,12 +322,12 @@ func _check_boundaries(slot: int) -> Dictionary:
 			actor.step(crouch, dt)
 		var key := "crouch_" + str(axis)
 		await physics_frame
-		samples[key] = _boundary_shot(crouch, true, true, key)
+		samples[key] = _boundary_shot(crouch, true, true, key, burst)
 		if absf(actor.accuracy_speed / Fighter.UNIT - limit_u) > SPEED_EPS_U:
 			errors.append("Crouch did not reach the accuracy boundary: %s/%s" % [WEAPONS[slot], key])
 	actor.restore(start)
 	await physics_frame
-	samples["jump_at_rest"] = _boundary_shot({"jump": true}, false, false, "jump_at_rest")
+	samples["jump_at_rest"] = _boundary_shot({"jump": true}, false, false, "jump_at_rest", burst)
 	for tick in range(1, 2 * tick_hz + 1):
 		await physics_frame
 		var cone: Variant = _sample_tick({})
@@ -330,17 +342,27 @@ func _check_boundaries(slot: int) -> Dictionary:
 	return samples
 
 
-func _boundary_shot(command: Dictionary, on_floor: bool, precise: bool, scenario: String) -> Dictionary:
-	# Exercise a nonzero aim and a previous burst's residual inaccuracy and recoil.
+func _boundary_shot(command: Dictionary, on_floor: bool, precise: bool, scenario: String, burst: Dictionary) -> Dictionary:
+	if not burst.is_empty():
+		var firing_state := burst.duplicate()
+		var pose := actor.state()
+		for field in ["position", "velocity", "grounded", "stance"]:
+			firing_state[field] = pose[field]
+		actor.restore(firing_state)
+	else:
+		# A pistol's kick normally centers before its next legal shot. Inject a
+		# still-offset pistol aim to keep the angular test sensitive to that case.
+		actor.shots = 5
+		actor.streak = 3
+		actor.recoil = Vector2(0.8, 2.4)
+		actor.fire_inaccuracy = 1.2
+		actor.accuracy_recovery_shots = 3
 	actor.yaw = 0.0
 	actor.pitch = -0.11
-	actor.shots = 5
-	actor.streak = 3
-	actor.recoil = Vector2(0.8, 2.4)
-	actor.fire_inaccuracy = 1.2
-	actor.accuracy_recovery_shots = 3
 	var cone: Variant = _sample_tick(command)
+	if actor.recoil.length() <= 0.1 or actor.fire_inaccuracy <= 0.0:
+		errors.append("Boundary shot lacked prior recoil or firing inaccuracy: %s/%s" % [WEAPONS[actor.weapon], scenario])
 	if cone == null or actor.grounded != on_floor or (float(cone) == 0.0) != precise or (probe_ray_error_deg <= ANGLE_EPS_DEG) != precise:
 		errors.append("Incorrect shot cone or ray: %s/%s" % [WEAPONS[actor.weapon], scenario])
 	return {"grounded": actor.grounded, "speed_u_per_s": actor.accuracy_speed / Fighter.UNIT,
-			"cone_deg": cone, "ray_error_from_recoiled_aim_deg": probe_ray_error_deg}
+			"cone_deg": cone, "recoil_offset_deg": actor.recoil.length(), "ray_error_from_recoiled_aim_deg": probe_ray_error_deg}
