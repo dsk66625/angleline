@@ -65,7 +65,10 @@ static func pose_ring() -> Dictionary:
 
 
 ## live maps finger name -> joint count (2 = MCP+PIP nodes, 1 = MCP only).
-static func build(materials: Dictionary, side: int, pose: Dictionary, live: Dictionary) -> Dictionary:
+## With dual=true a rest-pose copy of every live finger is also baked into a
+## "RestFingers" mesh: idle shows that single surface and hides the joints,
+## so articulated fingers cost draw calls only while an action plays.
+static func build(materials: Dictionary, side: int, pose: Dictionary, live: Dictionary, dual := false) -> Dictionary:
 	var mirror := -1.0 if side == RIGHT else 1.0
 	var root := Node3D.new()
 	root.name = "HandR" if side == RIGHT else "HandL"
@@ -78,6 +81,7 @@ static func build(materials: Dictionary, side: int, pose: Dictionary, live: Dict
 	VmGeo.box(palm, VmGeo.MATTE, SEAM, Vector3(0.058, 0.010, 0.006), Vector3(0, 0.024, 0.038))
 	VmGeo.cyl(palm, VmGeo.MATTE, SLEEVE, 0.028, 0.150, Vector3(0, 0, 0.125), Vector3(PI * 0.5, 0, 0), 10, 0.036)
 	var nodes := {}
+	var rest_parts := {}
 	for finger in FINGERS:
 		var curl: Vector2 = pose.get(finger, Vector2(0.12, 0.18))
 		var root_pos := Vector3(mirror * ROOT_X[finger], 0.002, -0.090)
@@ -108,6 +112,8 @@ static func build(materials: Dictionary, side: int, pose: Dictionary, live: Dict
 				_dist(rest, finger, curl.y)
 				mcp.add_child(VmGeo.merge(rest, materials))
 			nodes[finger] = [mcp, pip_node]
+			if dual:
+				_bake_finger(rest_parts, finger, root_pos, curl)
 	# Thumb: yawed outward at the base, two joints when live.
 	var thumb_curl: Vector2 = pose.get("thumb", Vector2(0.25, 0.20))
 	var thumb_yaw := mirror * -0.85
@@ -143,8 +149,28 @@ static func build(materials: Dictionary, side: int, pose: Dictionary, live: Dict
 			_dist(rest, "thumb", thumb_curl.y)
 			mcp.add_child(VmGeo.merge(rest, materials))
 		nodes["thumb"] = [mcp, pip_node]
+		if dual:
+			var baked := {}
+			_prox(baked, "thumb")
+			_dist(baked, "thumb", thumb_curl.y)
+			_bake_parts(rest_parts, baked, Transform3D(Basis.from_euler(Vector3(-thumb_curl.x, thumb_yaw, 0)), thumb_pos))
+	var rest_node: MeshInstance3D = null
+	if dual and not rest_parts.is_empty():
+		rest_node = VmGeo.merge(rest_parts, materials)
+		rest_node.name = "RestFingers"
+		root.add_child(rest_node)
 	root.add_child(VmGeo.merge(palm, materials))
-	return {"root": root, "nodes": nodes, "side": side}
+	return {"root": root, "nodes": nodes, "side": side, "rest": rest_node}
+
+
+## Swap between the merged rest-pose fingers and the articulated joints.
+static func set_live(rig: Dictionary, live: bool) -> void:
+	var rest: MeshInstance3D = rig.get("rest")
+	if rest == null:
+		return
+	rest.visible = not live
+	for finger in rig["nodes"]:
+		(rig["nodes"][finger][0] as Node3D).visible = live
 
 
 static func _prox(parts: Dictionary, finger: String) -> void:

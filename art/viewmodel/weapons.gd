@@ -23,8 +23,8 @@ static func materials() -> Dictionary:
 	return VmGeo.mats()
 
 
-static func _hand(materials: Dictionary, parent: Node3D, node_name: String, side: int, pose: Dictionary, live: Dictionary, pos: Vector3, axis: Vector3, palm: Vector3) -> Dictionary:
-	var rig := VmHands.build(materials, side, pose, live)
+static func _hand(materials: Dictionary, parent: Node3D, node_name: String, side: int, pose: Dictionary, live: Dictionary, pos: Vector3, axis: Vector3, palm: Vector3, dual := false) -> Dictionary:
+	var rig := VmHands.build(materials, side, pose, live, dual)
 	VmHands.orient(rig, pos, axis, palm)
 	rig["root"].name = node_name
 	rig["root"].set_meta("home", rig["root"].transform)
@@ -102,10 +102,10 @@ static func build_rifle(mats: Dictionary, hands := true) -> Node3D:
 	root.add_child(handle_node)
 	if hands:
 		_hand(mats, root, "HandFire", VmHands.RIGHT, VmHands.pose_grip(),
-			{"index": 2, "thumb": 2}, Vector3(0.026, -0.070, 0.145), Vector3(0, -0.954, -0.295), Vector3(-1, 0, 0))
+			{"index": 2, "thumb": 2}, Vector3(0.026, -0.070, 0.145), Vector3(0, -0.954, -0.295), Vector3(-1, 0, 0), true)
 		var support := _hand(mats, root, "HandSupport", VmHands.LEFT, VmHands.pose_wrap(),
 			{"index": 2, "thumb": 2, "middle": 1, "ring": 1, "pinky": 1},
-			Vector3(-0.030, -0.030, -0.260), Vector3(0, 0, 1), Vector3(0.85, -0.5, 0))
+			Vector3(-0.030, -0.030, -0.260), Vector3(0, 0, 1), Vector3(0.85, -0.5, 0), true)
 		support["root"].add_child(spare)
 		spare.position = Vector3(0.0, -0.03, -0.07)
 		spare.set_meta("home", spare.position)
@@ -164,7 +164,7 @@ static func build_pistol(mats: Dictionary, hands := true) -> Node3D:
 	spare.visible = false
 	if hands:
 		_hand(mats, root, "HandFire", VmHands.RIGHT, VmHands.pose_grip(),
-			{"index": 2, "thumb": 2}, Vector3(0.026, -0.060, 0.125), Vector3(0, -0.966, -0.259), Vector3(-1, 0, 0))
+			{"index": 2, "thumb": 2}, Vector3(0.026, -0.060, 0.125), Vector3(0, -0.966, -0.259), Vector3(-1, 0, 0), true)
 		var support := _hand(mats, root, "HandSupport", VmHands.LEFT, VmHands.pose_wrap(), {},
 			Vector3(-0.030, -0.070, 0.100), Vector3(0, 0.966, 0.259), Vector3(1, 0, 0))
 		support["root"].add_child(spare)
@@ -182,7 +182,7 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	var holder: Node3D
 	if hands:
 		var rig := VmHands.build(mats, VmHands.RIGHT, VmHands.pose_ring(),
-			{"middle": 1, "ring": 1, "pinky": 1})
+			{"middle": 1, "ring": 1, "pinky": 1}, true)
 		VmHands.orient(rig, Vector3.ZERO, Vector3(-0.203, -0.913, -0.355), Vector3(-0.916, 0.227, -0.061))
 		rig["root"].name = "HandFire"
 		rig["root"].set_meta("home", rig["root"].transform)
