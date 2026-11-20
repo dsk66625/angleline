@@ -30,6 +30,7 @@ func _run() -> void:
 		_expect(player.weapon == SLOTS[index], "Number key %d selected weapon %d" % [index + 1, player.weapon])
 		for stance in STANCES.size():
 			await _measure(index, stance)
+	await _counter_shot()
 	await _melee()
 	for problem in errors:
 		push_error(problem)
@@ -92,6 +93,34 @@ func _measure(index: int, stance: int) -> void:
 	_key(KEY_D, false)
 	_key(KEY_CTRL, false)
 	_key(KEY_SHIFT, false)
+
+
+func _counter_shot() -> void:
+	# Face the flat C/01 panel so a centered ray leaves its mark at eye X and Y.
+	_move_to(Vector3(-6.3, 0.01, 8.0))
+	_tap_key(KEY_1)
+	await _ticks(64)
+	_key(KEY_D, true)
+	await _ticks(128)
+	_key(KEY_D, false)
+	await _ticks(1)
+	_key(KEY_A, true)
+	await _ticks(8)
+	_expect(player.accuracy_speed / TrialFighter.UNIT > 73.1 and game.hud.rig_label.text.contains("移动散布"),
+			"Counter step 9 must still show movement spread")
+	var mark_index := game._mark_next
+	_left_click()
+	await _ticks(1)
+	var speed := player.accuracy_speed / TrialFighter.UNIT
+	var mark: Node3D = game._marks[mark_index]
+	var eye := player.eye_position()
+	var error := Vector2(mark.global_position.x - eye.x, mark.global_position.y - eye.y).length()
+	_expect(speed > 0.0 and speed <= 73.1 and player.last_fire == 0.0, "Counter step 10 must fire with zero spread")
+	_expect(game.hud.rig_label.text.contains("急停就绪") and game.hud.rig_label.text.ends_with("0.0°"),
+			"Counter step 10 must display the new accuracy window")
+	_expect(mark_index != game._mark_next and error < 0.00001, "Counter shot missed the center on C/01")
+	print("COUNTER_HIT tick=10 speed_u_s=%.3f spread_deg=%.3f impact_offset_m=%.7f" % [speed, player.last_fire, error])
+	_key(KEY_A, false)
 
 
 func _melee() -> void:

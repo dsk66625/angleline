@@ -33,6 +33,8 @@ const RIFLE_MAX_SPREAD_SPEED_RATIO := 0.95
 const FIRE_RECOVERY_FRACTION := 0.1
 const MIN_FIRE_INACCURACY := 0.00001
 const ACCURATE_SPEED_RATIO := 0.34
+# A diagonal Vector3 velocity at the crouch limit can round a few float32 ulps high.
+const SPEED_ROUNDOFF := 0.00002 * UNIT
 
 var yaw := 0.0
 var pitch := 0.0
@@ -218,9 +220,11 @@ func step(command: Dictionary, dt: float) -> Dictionary:
 	fire_inaccuracy += SHOT_PENALTY[weapon]
 	streak += 1
 	accuracy_recovery_shots = streak
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(shots * 9619 + weapon * 401)
-	var offset := Vector2.from_angle(rng.randf_range(0.0, TAU)) * sqrt(rng.randf()) * last_fire
+	var offset := Vector2.ZERO
+	if last_fire > 0.0:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = int(shots * 9619 + weapon * 401)
+		offset = Vector2.from_angle(rng.randf_range(0.0, TAU)) * sqrt(rng.randf()) * last_fire
 	var direction_of_shot := look_direction(yaw + deg_to_rad(recoil.x + offset.x),
 		pitch + deg_to_rad(recoil.y + offset.y))
 	var drift := sin(float(streak) * 0.63) * minf(float(streak) * 0.12, 1.10)
@@ -330,9 +334,10 @@ static func ground_friction_step(speed: float, dt: float) -> float:
 	return (1.0 - pow(reference_retained, dt * GROUND_REFERENCE_HZ)) / FRICTION
 
 func spread_degrees() -> float:
-	if weapon == KNIFE or (grounded and is_zero_approx(accuracy_speed)):
+	var run_speed := float(RUN_SPEED[weapon]) * UNIT
+	if weapon == KNIFE or (grounded and accuracy_speed <= run_speed * ACCURATE_SPEED_RATIO + SPEED_ROUNDOFF):
 		return 0.0
-	var ratio := accuracy_speed / (float(RUN_SPEED[weapon]) * UNIT)
+	var ratio := accuracy_speed / run_speed
 	var excess_speed := maxf(ratio - ACCURATE_SPEED_RATIO, 0.0)
 	var airborne := 5.0 if not grounded else 0.0
 	if weapon == RIFLE:

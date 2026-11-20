@@ -61,6 +61,7 @@ var _bench_fps := -1
 var _visual_frames := 0
 var _visual_view := 0
 var _stats_elapsed := 0.0
+var _showing_zero_spread := false
 var _bench_start := 0
 var _bench_previous := 0
 var _bench_frames: Array[float] = []
@@ -551,17 +552,19 @@ func _process(dt: float) -> void:
 			_tracer_timers[index] -= dt
 			if _tracer_timers[index] <= 0.0:
 				_tracer_pool[index].hide()
-	var shown_spread := snappedf(local_player.spread_degrees(), 0.1)
-	hud.crosshair.set_feedback(shown_spread, _viewmodel.firing(), _hit_time > 0.0)
+	var spread := local_player.spread_degrees()
+	hud.crosshair.set_feedback(snappedf(spread, 0.1), _viewmodel.firing(), _hit_time > 0.0)
 	hud.hit_label.modulate.a = clampf(_hit_time * 9.0, 0.0, 1.0)
 	_performance.append(dt * 1000.0)
 	_performance_elapsed += dt
 	if _performance_elapsed >= 0.8:
 		_update_telemetry()
 	_stats_elapsed += dt
-	if _stats_elapsed >= 0.05:
+	var zero_spread := spread == 0.0
+	if _stats_elapsed >= 0.05 or zero_spread != _showing_zero_spread:
 		_stats_elapsed = 0.0
-		_update_player_stats()
+		_showing_zero_spread = zero_spread
+		_update_player_stats(spread)
 	if _smoke == "--visual-test":
 		_visual_check()
 	elif _smoke == "--bench-run":
@@ -575,23 +578,21 @@ func _update_telemetry() -> void:
 	_performance.clear()
 	_performance_elapsed = 0.0
 
-func _update_player_stats() -> void:
+func _update_player_stats(spread: float) -> void:
 	var sens: float = options["sensitivity"]
 	var state_name := ["宽屏", "4:3 黑边", "4:3 拉伸"][int(options["view"])] as String
 	hud.position_label.text = "%s  ·  灵敏度 %s  ·  命中 %d" % [state_name, str(sens), _number_hits]
-	var speed := roundi(local_player.accuracy_speed / Fighter.UNIT)
+	var speed := local_player.accuracy_speed / Fighter.UNIT
 	if local_player.weapon == Fighter.KNIFE:
-		hud.rig_label.text = "%03d u/s" % speed
+		hud.rig_label.text = "%03d u/s" % roundi(speed)
 		_update_ammo()
 		return
-	var accuracy_state := "首发稳定"
+	var accuracy_state := "急停就绪"
 	if not local_player.grounded:
 		accuracy_state = "腾空散布"
-	elif local_player.accuracy_speed > Fighter.RUN_SPEED[local_player.weapon] * Fighter.UNIT * Fighter.ACCURATE_SPEED_RATIO:
+	elif spread > 0.0:
 		accuracy_state = "移动散布"
-	elif local_player.streak > 0:
-		accuracy_state = "射击恢复"
-	hud.rig_label.text = "%03d u/s   /   %s   /   %.1f°" % [speed, accuracy_state, local_player.spread_degrees()]
+	hud.rig_label.text = "%05.1f u/s   /   %s   /   %.1f°" % [speed, accuracy_state, spread]
 	_update_ammo()
 
 func _update_ammo() -> void:
