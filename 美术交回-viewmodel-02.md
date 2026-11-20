@@ -65,3 +65,10 @@
 - 刃剖面改"脊线+平行偏移边线"的厚曲线：上一版剖面自交使 `Geometry2D.triangulate_polygon` 返回空→端盖缺失→钩刃只剩一条线（headless 三角化测试证实 old=27 / new=0）。新剖面简单多边形，封盖正常，钩刃宽面完整。
 - 验证：SELF_TEST PASS / WEAPON_CHECK errors=0 / KZ_CHECK errors=0；20 帧目视（`vm-views-13c.log`）+ solo 四机位。
 - 性能（同会话暖缓存）：v0.9.3 包 1669.6、1510.9 FPS / P99 1.10、1.15 ms；v0.9.4 包 1491.2、1484.2 FPS / P99 1.10、1.08 ms（机器漂移区间内，无回归）。
+
+## v0.9.5 返工（用户反馈：QA 没测到近战稳态，握姿仍不对）
+
+- 承认 QA 缺口：此前只截动作瞬间与部署后 40 tick，未覆盖"全部动作结束后的持刀稳态"，也未打印刀节点旋转排查残留翻转。本轮 `viewmodel_views.gd` 增加 `knife-settle`（部署落定再等 60 tick）与 `knife-idle2`（挥刀后 90 tick），并打印 `VM_KNIFE_ROT idle/late`（实测 ≈0，无残留）。
+- 剪影再对齐 ref-cs2/knife-ref2.jpg：钩刃加长放平（脊线根 (-0.020,-0.028) → 尖 (-0.170,-0.105)，约 24° 下倾而非 45°），边线为脊线平行偏移 2.4cm；柄轴改 (-0.5,-0.75,+0.42) 后倾，使指环（-X 端）落在食指顶/远离镜头侧而非腕侧；BASE_POS 刀 (0.15,-0.11,-0.32) 拉近使拳头占比接近参考。
+- 验证：SELF_TEST PASS / WEAPON_CHECK errors=0 / KZ_CHECK errors=0；22 帧目视（`vm-views-14a.log`），稳态帧 `vm-knife-settle.png` / `vm-knife-idle2.png` 与参考剪影一致。
+- 性能（同会话）：v0.9.4 包 1387.0、1372.6 FPS / P99 1.71、1.70 ms；v0.9.5 暖缓存 1441.4、1496.9 FPS / P99 1.18、1.12 ms（首跑 633.4 / 15.1 ms 为新 APPDATA 冷着色器缓存，不计入对照）。
