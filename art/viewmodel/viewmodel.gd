@@ -34,6 +34,8 @@ var _clock := 0.0
 var _was_grounded := true
 var _alt := 1.0
 var _r := {}
+var _fire_live := false
+var _sup_live := false
 
 
 func _ready() -> void:
@@ -98,6 +100,11 @@ func _deploy(index: int) -> void:
 		"support": root.get_meta("handsupport_rig") if root.has_meta("handsupport_rig") else null,
 	}
 	_reset_parts()
+	_fire_live = false
+	_sup_live = false
+	for key in ["fire", "support"]:
+		if _r.get(key) != null:
+			VmHands.set_live(_r[key], false)
 	for i in weapons.size():
 		weapons[i].visible = i == index
 
@@ -204,6 +211,16 @@ func tick(dt: float, player: TrialFighter, look_delta: Vector2) -> void:
 		rot += Vector3(0.03, 0.0, 0.0)
 	pos += Vector3(0.0, sin(_clock * 1.6) * 0.0035, 0.0)
 	rot += Vector3(0.0, 0.0, sin(_clock * 1.1) * 0.006)
+	var fire_live := _trigger > 0.0 or (_weapon == TrialFighter.KNIFE and _state != "idle")
+	var sup_live := _state == "reload"
+	if fire_live != _fire_live:
+		_fire_live = fire_live
+		if _r.get("fire") != null:
+			VmHands.set_live(_r["fire"], fire_live)
+	if sup_live != _sup_live:
+		_sup_live = sup_live
+		if _r.get("support") != null:
+			VmHands.set_live(_r["support"], sup_live)
 	root.position = pos
 	root.rotation = rot
 	var flash := root.get_node_or_null("Flash")
