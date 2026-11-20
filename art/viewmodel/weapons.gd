@@ -15,7 +15,7 @@ const STEEL := Color("#4a555e")
 const STEEL_DARK := Color("#333c44")
 const PARKER := Color("#363e45")
 const POLYMER := Color("#22282b")
-const BLADE := Color("#c2cfd4")
+const BLADE := Color("#e2ebEE")
 const BLADE_EDGE := Color("#c8d4d8")
 
 
@@ -23,11 +23,16 @@ static func materials() -> Dictionary:
 	return VmGeo.mats()
 
 
-static func _hand(materials: Dictionary, parent: Node3D, node_name: String, side: int, pose: Dictionary, live: Dictionary, pos: Vector3, axis: Vector3, palm: Vector3, dual := false) -> Dictionary:
-	var rig := VmHands.build(materials, side, pose, live, dual)
-	VmHands.orient(rig, pos, axis, palm)
+static func _hand(materials: Dictionary, parent: Node3D, node_name: String, side: int, live: Dictionary, solved: Dictionary, dual := false, override := {}) -> Dictionary:
+	var pose: Dictionary = solved["pose"].duplicate()
+	for key in override:
+		pose[key] = override[key]
+	var rig := VmHands.build(materials, side, pose, live, dual, solved["dip"])
+	VmHands.place(rig, solved)
+	for key in override:
+		VmHands.curl(rig, key, (override[key] as Vector2).x, (override[key] as Vector2).y)
 	rig["root"].name = node_name
-	rig["root"].set_meta("home", rig["root"].transform)
+	rig["rest_pose"] = pose
 	parent.add_child(rig["root"])
 	parent.set_meta(node_name.to_lower() + "_rig", rig)
 	return rig
@@ -58,7 +63,7 @@ static func build_rifle(mats: Dictionary, hands := true) -> Node3D:
 	VmGeo.cyl(parts, VmGeo.METAL, STEEL_DARK, 0.002, 0.020, Vector3(0, 0.046, -0.455), Vector3.ZERO, 6)
 	VmGeo.cyl(parts, VmGeo.METAL, STEEL_DARK, 0.010, 0.045, Vector3(0, 0.012, -0.520), Vector3(PI * 0.5 + 0.35, 0, 0), 10)
 	# Wood handguards with palm swell and groove ribs, gas block cap.
-	VmGeo.bevel(parts, VmGeo.MATTE, WOOD, Vector3(0.046, 0.050, 0.190), Vector3(0, -0.006, -0.260), Vector3.ZERO, 0.010)
+	VmGeo.bevel(parts, VmGeo.MATTE, WOOD, Vector3(0.050, 0.050, 0.190), Vector3(0, -0.006, -0.260), Vector3.ZERO, 0.014)
 	VmGeo.bevel(parts, VmGeo.MATTE, WOOD_LIGHT, Vector3(0.050, 0.026, 0.100), Vector3(0, -0.024, -0.255), Vector3.ZERO, 0.010)
 	VmGeo.box(parts, VmGeo.MATTE, WOOD_LIGHT, Vector3(0.047, 0.005, 0.010), Vector3(0, 0.012, -0.215))
 	VmGeo.box(parts, VmGeo.MATTE, WOOD_LIGHT, Vector3(0.047, 0.005, 0.010), Vector3(0, 0.012, -0.300))
@@ -68,8 +73,8 @@ static func build_rifle(mats: Dictionary, hands := true) -> Node3D:
 	VmGeo.box(parts, VmGeo.METAL, STEEL_DARK, Vector3(0.008, 0.006, 0.070), Vector3(0, -0.072, 0.030))
 	VmGeo.box(parts, VmGeo.METAL, STEEL_DARK, Vector3(0.008, 0.026, 0.006), Vector3(0, -0.060, -0.004))
 	VmGeo.box(parts, VmGeo.METAL, STEEL_DARK, Vector3(0.006, 0.020, 0.008), Vector3(0, -0.056, 0.020), Vector3(0.25, 0, 0))
-	VmGeo.bevel(parts, VmGeo.MATTE, BAKELITE, Vector3(0.032, 0.095, 0.046), Vector3(0, -0.085, 0.075), Vector3(0.30, 0, 0), 0.008)
-	VmGeo.bevel(parts, VmGeo.MATTE, BAKELITE, Vector3(0.034, 0.012, 0.048), Vector3(0, -0.128, 0.088), Vector3(0.30, 0, 0), 0.004)
+	VmGeo.bevel(parts, VmGeo.MATTE, BAKELITE, Vector3(0.040, 0.095, 0.040), Vector3(0, -0.085, 0.075), Vector3(0.30, 0, 0), 0.012)
+	VmGeo.bevel(parts, VmGeo.MATTE, BAKELITE, Vector3(0.042, 0.012, 0.042), Vector3(0, -0.128, 0.088), Vector3(0.30, 0, 0), 0.004)
 	VmGeo.bevel(parts, VmGeo.MATTE, WOOD, Vector3(0.036, 0.070, 0.200), Vector3(0, -0.012, 0.260), Vector3(-0.10, 0, 0), 0.010)
 	VmGeo.bevel(parts, VmGeo.MATTE, WOOD_LIGHT, Vector3(0.037, 0.030, 0.090), Vector3(0, 0.014, 0.230), Vector3(-0.10, 0, 0), 0.010)
 	VmGeo.bevel(parts, VmGeo.MATTE, STEEL_DARK, Vector3(0.038, 0.088, 0.014), Vector3(0, -0.024, 0.360), Vector3(-0.10, 0, 0), 0.004)
@@ -101,13 +106,13 @@ static func build_rifle(mats: Dictionary, hands := true) -> Node3D:
 	handle_node.set_meta("home", handle_node.position)
 	root.add_child(handle_node)
 	if hands:
-		_hand(mats, root, "HandFire", VmHands.RIGHT, VmHands.pose_grip(),
-			{"index": 2, "thumb": 2}, Vector3(0.026, -0.070, 0.145), Vector3(0, -0.954, -0.295), Vector3(-1, 0, 0), true)
-		var support := _hand(mats, root, "HandSupport", VmHands.LEFT, VmHands.pose_wrap(),
-			{"index": 2, "thumb": 2, "middle": 1, "ring": 1, "pinky": 1},
-			Vector3(-0.030, -0.030, -0.260), Vector3(0, 0, 1), Vector3(0.85, -0.5, 0), true)
+		var fire_solve := VmHands.wrap_pose(Vector3(0, -0.085, 0.075), Vector3(0, -0.954, -0.295), Vector3(-1, 0, 0), Vector3(0, 0.295, -0.954), 0.020)
+		_hand(mats, root, "HandFire", VmHands.RIGHT, {"index": 2, "thumb": 2}, fire_solve, true, {"index": Vector2(0.50, 0.85)})
+		var sup_solve := VmHands.wrap_pose(Vector3(0, -0.006, -0.260), Vector3(0, 0, 1), Vector3(0.85, -0.5, 0), Vector3(0.5, 0.85, 0), 0.025)
+		var support := _hand(mats, root, "HandSupport", VmHands.LEFT, {"index": 2, "thumb": 2, "middle": 1, "ring": 1, "pinky": 1}, sup_solve, true)
 		support["root"].add_child(spare)
-		spare.position = Vector3(0.0, -0.03, -0.07)
+		spare.position = Vector3(0.0, -0.030, -0.070)
+		spare.rotation = Vector3(0, 0, PI * 0.5)
 		spare.set_meta("home", spare.position)
 	var muzzle := Vector3(0, 0.012, -0.545)
 	root.add_child(VmGeo.flash(mats, muzzle, 1.0))
@@ -121,7 +126,7 @@ static func build_pistol(mats: Dictionary, hands := true) -> Node3D:
 	var parts := {}
 	# Frame, dust cover, grip with panels, trigger group, controls.
 	VmGeo.bevel(parts, VmGeo.MATTE, POLYMER, Vector3(0.028, 0.030, 0.150), Vector3(0, -0.008, 0.010), Vector3.ZERO, 0.005)
-	VmGeo.bevel(parts, VmGeo.MATTE, POLYMER, Vector3(0.030, 0.095, 0.042), Vector3(0, -0.062, 0.062), Vector3(0.26, 0, 0), 0.007)
+	VmGeo.bevel(parts, VmGeo.MATTE, POLYMER, Vector3(0.036, 0.095, 0.036), Vector3(0, -0.062, 0.062), Vector3(0.26, 0, 0), 0.010)
 	for side in [-1.0, 1.0]:
 		VmGeo.box(parts, VmGeo.MATTE, Color("#2b3236"), Vector3(0.002, 0.070, 0.030), Vector3(side * 0.0155, -0.062, 0.062), Vector3(0.26, 0, 0))
 		for i in 4:
@@ -163,12 +168,13 @@ static func build_pistol(mats: Dictionary, hands := true) -> Node3D:
 	var spare := VmGeo.pivot_node(mag, mats, Vector3(0, -0.040, 0.0), "MagSpare")
 	spare.visible = false
 	if hands:
-		_hand(mats, root, "HandFire", VmHands.RIGHT, VmHands.pose_grip(),
-			{"index": 2, "thumb": 2}, Vector3(0.026, -0.060, 0.125), Vector3(0, -0.966, -0.259), Vector3(-1, 0, 0), true)
-		var support := _hand(mats, root, "HandSupport", VmHands.LEFT, VmHands.pose_wrap(), {},
-			Vector3(-0.030, -0.070, 0.100), Vector3(0, 0.966, 0.259), Vector3(1, 0, 0))
+		var fire_solve := VmHands.wrap_pose(Vector3(0, -0.062, 0.062), Vector3(0, -0.966, -0.259), Vector3(-1, 0, 0), Vector3(0, 0.259, -0.966), 0.018)
+		_hand(mats, root, "HandFire", VmHands.RIGHT, {"index": 2, "thumb": 2}, fire_solve, true, {"index": Vector2(0.50, 0.85)})
+		var sup_solve := VmHands.wrap_pose(Vector3(0.004, -0.062, 0.052), Vector3(0, -0.966, -0.259), Vector3(1, 0, 0), Vector3(0, 0.259, -0.966), 0.044)
+		var support := _hand(mats, root, "HandSupport", VmHands.LEFT, {}, sup_solve, false)
 		support["root"].add_child(spare)
-		spare.position = Vector3(0.0, -0.03, -0.07)
+		spare.position = Vector3(0.0, -0.030, -0.070)
+		spare.rotation = Vector3(0, 0, PI * 0.5)
 		spare.set_meta("home", spare.position)
 	var muzzle := Vector3(0, 0.020, -0.268)
 	root.add_child(VmGeo.flash(mats, muzzle, 0.55))
@@ -181,19 +187,26 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	root.name = "KnifeKarambit"
 	var holder: Node3D
 	if hands:
-		var rig := VmHands.build(mats, VmHands.RIGHT, VmHands.pose_ring(),
-			{"middle": 1, "ring": 1, "pinky": 1}, true)
-		VmHands.orient(rig, Vector3.ZERO, Vector3(-0.203, -0.913, -0.355), Vector3(-0.916, 0.227, -0.061))
+		var a0 := Vector3(0.8, -0.5, 0.1).normalized()
+		var p0 := Vector3(0.5, 0.8, 0.1)
+		p0 = (p0 - a0 * p0.dot(a0)).normalized()
+		var b0 := Basis(a0, -p0, -a0.cross(p0))
+		var solve := VmHands.wrap_pose(b0 * Vector3(0.010, -0.035, -0.105), a0, b0 * Vector3(0, -1, 0), b0 * Vector3(-0.13, -0.03, 0.89), 0.014, 0.5)
+		var kpose: Dictionary = solve["pose"].duplicate()
+		kpose["index"] = Vector2(1.0, 1.25)
+		var rig := VmHands.build(mats, VmHands.RIGHT, kpose, {"middle": 1, "ring": 1, "pinky": 1}, true, solve["dip"])
+		VmHands.place(rig, solve)
+		VmHands.curl(rig, "index", 1.0, 1.25)
 		rig["root"].name = "HandFire"
-		rig["root"].set_meta("home", rig["root"].transform)
+		rig["rest_pose"] = kpose
 		root.add_child(rig["root"])
 		root.set_meta("handfire_rig", rig)
 		holder = rig["root"]
 	else:
 		holder = Node3D.new()
 		holder.name = "HandFire"
-		var a := Vector3(-0.203, -0.913, -0.355).normalized()
-		var p := Vector3(-0.916, 0.227, -0.061)
+		var a := Vector3(0.8, -0.5, 0.1).normalized()
+		var p := Vector3(0.5, 0.8, 0.1)
 		p = (p - a * p.dot(a)).normalized()
 		holder.transform = Transform3D(Basis(a, -p, -a.cross(p)), Vector3.ZERO)
 		holder.set_meta("home", holder.transform)
@@ -201,15 +214,17 @@ static func build_knife(mats: Dictionary, hands := true) -> Node3D:
 	# Handle through the fist, pommel ring at the index loop, hawkbill blade
 	# with a real grind (spine thick, edge tapered) leaving the pinky side.
 	var knife := {}
-	VmGeo.bevel(knife, VmGeo.MATTE, POLYMER, Vector3(0.030, 0.024, 0.085), Vector3(0.010, -0.035, -0.105), Vector3(0, PI * 0.5, 0), 0.006)
+	VmGeo.bevel(knife, VmGeo.MATTE, POLYMER, Vector3(0.028, 0.028, 0.085), Vector3(0.010, -0.035, -0.105), Vector3(0, PI * 0.5, 0), 0.008)
 	for i in 3:
 		VmGeo.cyl(knife, VmGeo.MATTE, STEEL_DARK, 0.006, 0.026, Vector3(-0.006 + i * 0.018, -0.024, -0.105), Vector3(0, 0, PI * 0.5), 8)
 	VmGeo.torus(knife, VmGeo.METAL, BLADE, 0.019, 0.004, Vector3(-0.040, -0.035, -0.105), Vector3(0, 0, PI * 0.5))
+	# Blade sits in front of the fist plane (camera side) with a tang back to
+	# the handle, so the hook is never hidden behind the palm.
 	var profile := PackedVector2Array([
-		Vector2(0.040, -0.022), Vector2(0.072, -0.030), Vector2(0.096, -0.052),
-		Vector2(0.108, -0.084), Vector2(0.104, -0.118), Vector2(0.088, -0.146),
-		Vector2(0.080, -0.124), Vector2(0.076, -0.096), Vector2(0.068, -0.068),
-		Vector2(0.054, -0.046), Vector2(0.038, -0.034)])
+		Vector2(0.0400, -0.0324), Vector2(0.0816, -0.0241), Vector2(0.1128, -0.0012),
+		Vector2(0.1284, 0.0321), Vector2(0.1232, 0.0674), Vector2(0.1024, 0.0966),
+		Vector2(0.0920, 0.0737), Vector2(0.0868, 0.0446), Vector2(0.0764, 0.0154),
+		Vector2(0.0582, -0.0074), Vector2(0.0374, -0.0199)])
 	var widths := PackedFloat32Array([0.0035, 0.0035, 0.0032, 0.0026, 0.0016, 0.0005, 0.0008, 0.0014, 0.0022, 0.0030, 0.0035])
 	VmGeo.extrude_z_taper(knife, VmGeo.METAL, BLADE, profile, widths, Vector3(0, 0, -0.105))
 	var pivot := Vector3(-0.040, -0.035, -0.105)

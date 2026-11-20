@@ -12,8 +12,8 @@ extends Node3D
 const DEPLOY := 0.22
 const SWING := 0.26
 const INSPECT_TIME := [3.4, 3.0, 3.2]
-const BASE_POS := [Vector3(0.16, -0.075, -0.42), Vector3(0.15, -0.10, -0.52), Vector3(0.17, -0.13, -0.34)]
-const BASE_ROT := [Vector3(-0.02, 0.10, 0.02), Vector3(-0.02, 0.10, 0.02), Vector3(0.0, 0.0, 0.5)]
+const BASE_POS := [Vector3(0.16, -0.075, -0.42), Vector3(0.15, -0.10, -0.52), Vector3(0.14, -0.11, -0.40)]
+const BASE_ROT := [Vector3(-0.02, 0.10, 0.02), Vector3(-0.02, 0.10, 0.02), Vector3(0.0, 0.6, 0.0)]
 
 var weapons: Array[Node3D] = []
 var _weapon := -1
@@ -134,10 +134,7 @@ func _rest_hands() -> void:
 			continue
 		var home: Transform3D = rig["root"].get_meta("home")
 		rig["root"].transform = home
-		var pose := VmHands.pose_grip() if key == "fire" else VmHands.pose_wrap()
-		if _weapon == TrialFighter.KNIFE:
-			pose = VmHands.pose_ring()
-		VmHands.curl_all(rig, pose)
+		VmHands.curl_all(rig, rig["rest_pose"])
 
 
 func tick(dt: float, player: TrialFighter, look_delta: Vector2) -> void:
@@ -234,7 +231,7 @@ func _fire_parts() -> void:
 	var pull := sin(PI * clampf(1.0 - _trigger / 0.10, 0.0, 1.0)) if _trigger > 0.0 else 0.0
 	var fire = _r.get("fire")
 	if fire != null and _weapon != TrialFighter.KNIFE and pull > 0.0:
-		VmHands.curl(fire, "index", 0.55 + 0.10 * pull, 0.95 + 0.35 * pull)
+		VmHands.curl(fire, "index", 0.50 + 0.10 * pull, 0.85 + 0.35 * pull)
 	var recip := sin(PI * clampf(1.0 - _cycle / 0.07, 0.0, 1.0)) if _cycle > 0.0 else 0.0
 	if _state == "reload":
 		return
@@ -253,7 +250,7 @@ func _deploy_hands(p: float) -> void:
 			knife.rotation.x = TAU * (1.0 - _ease(p))
 		var fire = _r.get("fire")
 		if fire != null:
-			VmHands.blend(fire, VmHands.pose_open(), VmHands.pose_ring(), _ease(p))
+			VmHands.blend(fire, VmHands.pose_open(), fire["rest_pose"], _ease(p))
 
 
 func _reload_hands(u: float) -> void:
@@ -272,16 +269,16 @@ func _reload_hands(u: float) -> void:
 			var move := _track_v(u, [
 				[0.00, Vector3.ZERO, Vector3.ZERO],
 				[0.10, Vector3.ZERO, Vector3.ZERO],
-				[0.22, Vector3(0.034, -0.060, 0.275), Vector3(0.2, 0, 0)],
+				[0.22, Vector3(0.0, -0.020, 0.280), Vector3(0.2, 0, 0)],
 				[0.34, Vector3(-0.020, -0.180, 0.240), Vector3(0.4, 0.2, -0.3)],
 				[0.46, Vector3(-0.060, -0.300, 0.180), Vector3(0.5, 0.3, -0.4)],
-				[0.60, Vector3(0.099, -0.130, 0.240), Vector3(0, 0, 2.10)],
-				[0.72, Vector3(0.099, -0.030, 0.240), Vector3(0, 0, 2.10)],
-				[0.84, Vector3(0.094, 0.050, 0.355), Vector3(-0.5, 0, 0.6)],
-				[0.92, Vector3(0.094, 0.045, 0.355), Vector3(-0.5, 0, 0.6)],
+				[0.60, Vector3(-0.0676, -0.1109, 0.2936), Vector3(-1.5708, 0, 0)],
+				[0.72, Vector3(-0.0676, -0.0109, 0.2936), Vector3(-1.5708, 0, 0)],
+				[0.84, Vector3(0.031, 0.099, 0.360), Vector3(-0.5, 0, 0.6)],
+				[0.92, Vector3(0.031, 0.094, 0.360), Vector3(-0.5, 0, 0.6)],
 				[1.00, Vector3.ZERO, Vector3.ZERO]])
 			_place_hand(support, move[0], move[1])
-			VmHands.blend(support, _reload_pose_a(u), _reload_pose_b(u), _reload_pose_t(u))
+			VmHands.blend(support, _reload_pose_a(u, support["rest_pose"]), _reload_pose_b(u, support["rest_pose"]), _reload_pose_t(u))
 		var handle: Node3D = _r.get("handle")
 		if handle:
 			var rack := sin(PI * clampf((u - 0.84) / 0.08, 0.0, 1.0))
@@ -300,10 +297,10 @@ func _reload_hands(u: float) -> void:
 				[0.12, Vector3.ZERO, Vector3.ZERO],
 				[0.30, Vector3(-0.020, -0.160, 0.060), Vector3(0.4, 0.2, -0.3)],
 				[0.44, Vector3(-0.050, -0.280, 0.040), Vector3(0.5, 0.3, -0.4)],
-				[0.60, Vector3(0.012, -0.085, -0.106), Vector3(0, 0, 1.5708)],
-				[0.74, Vector3(0.012, 0.015, -0.106), Vector3(0, 0, 1.5708)],
-				[0.86, Vector3(0.036, 0.120, -0.050), Vector3(-0.7, 0, 0.4)],
-				[0.94, Vector3(0.036, 0.115, -0.050), Vector3(-0.7, 0, 0.4)],
+				[0.60, Vector3(0.002, -0.1107, -0.1017), Vector3(2.880, 0, 0)],
+				[0.74, Vector3(0.002, -0.0107, -0.1017), Vector3(2.880, 0, 0)],
+				[0.86, Vector3(0.056, 0.149, -0.078), Vector3(-0.7, 0, 0.4)],
+				[0.94, Vector3(0.056, 0.144, -0.078), Vector3(-0.7, 0, 0.4)],
 				[1.00, Vector3.ZERO, Vector3.ZERO]])
 			_place_hand(support, move[0], move[1])
 		var slide: Node3D = _r.get("slide")
@@ -312,9 +309,9 @@ func _reload_hands(u: float) -> void:
 			slide.position = (slide.get_meta("home") as Vector3) + Vector3(0, 0, 0.055 * rack)
 
 
-func _reload_pose_a(u: float) -> Dictionary:
+func _reload_pose_a(u: float, rest: Dictionary) -> Dictionary:
 	if u < 0.10:
-		return VmHands.pose_wrap()
+		return rest
 	if u < 0.46:
 		return VmHands.pose_open()
 	if u < 0.60:
@@ -324,7 +321,7 @@ func _reload_pose_a(u: float) -> Dictionary:
 	return _mag_hold()
 
 
-func _reload_pose_b(u: float) -> Dictionary:
+func _reload_pose_b(u: float, rest: Dictionary) -> Dictionary:
 	if u < 0.10:
 		return VmHands.pose_open()
 	if u < 0.46:
@@ -336,8 +333,8 @@ func _reload_pose_b(u: float) -> Dictionary:
 	if u < 0.84:
 		return _mag_hold()
 	if u < 0.92:
-		return VmHands.pose_fist()
-	return VmHands.pose_wrap()
+		return VmHands.fist_pose()["pose"]
+	return rest
 
 
 func _reload_pose_t(u: float) -> float:
@@ -355,9 +352,7 @@ func _reload_pose_t(u: float) -> float:
 
 
 func _mag_hold() -> Dictionary:
-	return {"index": Vector2(1.0, 1.1), "middle": Vector2(1.2, 1.3),
-		"ring": Vector2(1.2, 1.3), "pinky": Vector2(1.1, 1.2),
-		"thumb": Vector2(0.7, 0.6)}
+	return VmHands.fist_pose()["pose"]
 
 
 func _place_hand(rig: Dictionary, off: Vector3, rot: Vector3) -> void:
@@ -389,8 +384,8 @@ func _inspect_hands(u: float) -> void:
 	if knife:
 		knife.rotation.x = spin
 	if fire != null:
-		var closed := VmHands.pose_ring()
-		var opened := VmHands.pose_ring()
+		var closed: Dictionary = fire["rest_pose"]
+		var opened: Dictionary = fire["rest_pose"].duplicate()
 		opened["middle"] = Vector2(0.25, 0.30)
 		opened["ring"] = Vector2(0.25, 0.30)
 		opened["pinky"] = Vector2(0.25, 0.30)

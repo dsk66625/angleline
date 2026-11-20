@@ -44,11 +44,11 @@ func _run() -> void:
 		scene.add_child(weapon)
 		for view in 2:
 			if view == 0:
-				camera.position = Vector3(1.15, 0.22, -0.05)
-				camera.look_at(Vector3(0, -0.02, -0.10), Vector3.UP)
+				camera.position = Vector3(0.42, 0.10, 0.12)
+				camera.look_at(Vector3(0, -0.05, 0.02), Vector3.UP)
 			else:
-				camera.position = Vector3(0.60, 0.50, 0.75)
-				camera.look_at(Vector3(0, -0.04, -0.12), Vector3.UP)
+				camera.position = Vector3(0.30, 0.30, 0.42)
+				camera.look_at(Vector3(0, -0.06, -0.05), Vector3.UP)
 			await _shot("%s-solo%d" % [names[i], view])
 		weapon.queue_free()
 		await process_frame
